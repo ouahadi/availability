@@ -1,6 +1,8 @@
 // Google Calendar integration using OAuth 2.0 with PKCE
 // Stores tokens in chrome.storage.sync under key 'googleAuth'
-import { GOOGLE_CLIENT_SECRET as CONFIG_CLIENT_SECRET } from "./config.js";
+// Import config flexibly so missing named exports don't break the import
+import * as CONFIG from "./config.js";
+const CONFIG_CLIENT_SECRET = CONFIG.GOOGLE_CLIENT_SECRET;
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -156,6 +158,34 @@ export async function fetchUpcomingEvents(clientId, maxResults = 10) {
   url.searchParams.set("orderBy", "startTime");
   url.searchParams.set("timeMin", new Date().toISOString());
   url.searchParams.set("maxResults", String(maxResults));
+
+  const resp = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Events fetch failed: ${errText}`);
+  }
+  const data = await resp.json();
+  return (data.items || []).map(ev => ({
+    id: ev.id,
+    summary: ev.summary || "(no title)",
+    start: ev.start?.dateTime || ev.start?.date || null,
+    end: ev.end?.dateTime || ev.end?.date || null,
+    location: ev.location || null,
+    hangoutLink: ev.hangoutLink || null
+  }));
+}
+
+export async function fetchEventsInRange(clientId, timeMinIso, timeMaxIso) {
+  const accessToken = await getValidAccessToken(clientId);
+  if (!accessToken) throw new Error("Not authenticated");
+  const url = new URL(CALENDAR_EVENTS_ENDPOINT);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("timeMin", timeMinIso);
+  url.searchParams.set("timeMax", timeMaxIso);
+  url.searchParams.set("maxResults", "2500");
 
   const resp = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` }

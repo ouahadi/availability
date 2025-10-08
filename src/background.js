@@ -1,5 +1,6 @@
 // Background service worker (MV3)
-import { startGoogleAuth, fetchUpcomingEvents, signOutGoogle } from "./calendar.js";
+import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, signOutGoogle } from "./calendar.js";
+import { generateAvailability } from "./availability.js";
 import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
 
 // Static client ID from config module
@@ -43,6 +44,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
         const events = await fetchUpcomingEvents(GOOGLE_CLIENT_ID, message.maxResults || 10);
         sendResponse({ ok: true, events });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "GENERATE_AVAILABILITY") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const now = new Date();
+        const start = new Date(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 14);
+        const events = await fetchEventsInRange(GOOGLE_CLIENT_ID, start.toISOString(), end.toISOString());
+        const text = await generateAvailability(events, start, end);
+        sendResponse({ ok: true, text });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }

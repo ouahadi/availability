@@ -59,4 +59,24 @@ document.getElementById("google-signout").addEventListener("click", async () => 
   eventsList.innerHTML = "";
 });
 
+const availabilityEl = document.getElementById("availability");
+document.getElementById("gen-availability").addEventListener("click", async () => {
+  statusEl.textContent = "Generating availability...";
+  availabilityEl.value = "";
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
+    if (!res?.ok) {
+      statusEl.textContent = `Availability error: ${res?.error || ""}`;
+      return;
+    }
+    availabilityEl.value = res.text;
+    statusEl.textContent = "Done";
+    availabilityEl.focus();
+    availabilityEl.select();
+    document.execCommand("copy");
+  } catch (e) {
+    statusEl.textContent = `Availability error: ${e?.message || e}`;
+  }
+});
+
 
