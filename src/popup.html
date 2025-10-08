@@ -13,10 +13,16 @@
   </head>
   <body>
     <div class="title">Availability Extension</div>
-    <div class="row">
+    <div class="row" style="margin-bottom:8px;">
       <button id="ping">Ping Background</button>
       <span id="status">Idle</span>
     </div>
+    <div class="row" style="margin-bottom:8px;">
+      <button id="google-auth">Connect Google Calendar</button>
+      <button id="google-events">Load Events</button>
+      <button id="google-signout">Sign out</button>
+    </div>
+    <ul id="events" style="padding-left:18px; margin:0;"></ul>
     <script src="./popup.js" type="module"></script>
   </body>
   </html>

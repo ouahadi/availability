@@ -22,8 +22,12 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage"],
-  "host_permissions": ["<all_urls>"]
+  "permissions": ["storage", "identity"],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://oauth2.googleapis.com/*",
+    "https://accounts.google.com/*"
+  ]
 }
 
 
