@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Availability Extension",
+  "version": "0.0.1",
+  "description": "Starter Chrome extension boilerplate.",
+  "action": {
+    "default_title": "Availability",
+    "default_popup": "src/popup.html"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"]
+}
+
+
