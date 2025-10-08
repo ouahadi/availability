@@ -18,32 +18,44 @@ chrome.runtime.onMessage.addListener((msg) => {
 const eventsList = document.getElementById("events");
 document.getElementById("google-auth").addEventListener("click", async () => {
   statusEl.textContent = "Authorizing...";
-  const res = await chrome.runtime.sendMessage({ type: "GOOGLE_AUTH" });
-  statusEl.textContent = res?.ok ? "Authorized" : `Auth error: ${res?.error || ""}`;
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GOOGLE_AUTH" });
+    statusEl.textContent = res?.ok ? "Authorized" : `Auth error: ${res?.error || ""}`;
+  } catch (e) {
+    statusEl.textContent = `Auth error: ${e?.message || e}`;
+  }
 });
 
 document.getElementById("google-events").addEventListener("click", async () => {
   statusEl.textContent = "Loading events...";
-  const res = await chrome.runtime.sendMessage({ type: "GOOGLE_LIST_EVENTS", maxResults: 10 });
-  if (!res?.ok) {
-    statusEl.textContent = `Load error: ${res?.error || ""}`;
-    return;
-  }
-  statusEl.textContent = `Loaded ${res.events.length}`;
-  eventsList.innerHTML = "";
-  for (const ev of res.events) {
-    const li = document.createElement("li");
-    const when = ev.start ? new Date(ev.start).toLocaleString() : "(no time)";
-    const loc = ev.location ? ` @ ${ev.location}` : "";
-    li.textContent = `${when} — ${ev.summary}${loc}`;
-    eventsList.appendChild(li);
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GOOGLE_LIST_EVENTS", maxResults: 10 });
+    if (!res?.ok) {
+      statusEl.textContent = `Load error: ${res?.error || ""}`;
+      return;
+    }
+    statusEl.textContent = `Loaded ${res.events.length}`;
+    eventsList.innerHTML = "";
+    for (const ev of res.events) {
+      const li = document.createElement("li");
+      const when = ev.start ? new Date(ev.start).toLocaleString() : "(no time)";
+      const loc = ev.location ? ` @ ${ev.location}` : "";
+      li.textContent = `${when} — ${ev.summary}${loc}`;
+      eventsList.appendChild(li);
+    }
+  } catch (e) {
+    statusEl.textContent = `Load error: ${e?.message || e}`;
   }
 });
 
 document.getElementById("google-signout").addEventListener("click", async () => {
   statusEl.textContent = "Signing out...";
-  const res = await chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" });
-  statusEl.textContent = res?.ok ? "Signed out" : `Sign out error: ${res?.error || ""}`;
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" });
+    statusEl.textContent = res?.ok ? "Signed out" : `Sign out error: ${res?.error || ""}`;
+  } catch (e) {
+    statusEl.textContent = `Sign out error: ${e?.message || e}`;
+  }
   eventsList.innerHTML = "";
 });
 

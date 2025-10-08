@@ -5,8 +5,11 @@ Minimal boilerplate with Google Calendar integration.
 ## Setup
 
 1. Copy `src/config.example.js` to `src/config.js` and set `GOOGLE_CLIENT_ID`.
-2. In `manifest.json`, ensure permissions include `identity` and host access for Google APIs (already added).
-3. Load the extension in Chrome via `chrome://extensions` → Load unpacked → select this folder.
+2. In Google Cloud Console, create OAuth Client ID (Web application). Set Authorized redirect URI to:
+   - `https://<EXTENSION_ID>.chromiumapp.org/`
+   You can get your redirect URL by opening the extension and checking the background console log (we log it on install).
+3. In `manifest.json`, ensure permissions include `identity` and host access for Google APIs (already added).
+4. Load the extension in Chrome via `chrome://extensions` → Load unpacked → select this folder.
 
 ## Using Google Calendar
 

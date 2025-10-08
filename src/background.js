@@ -1,19 +1,16 @@
 // Background service worker (MV3)
 import { startGoogleAuth, fetchUpcomingEvents, signOutGoogle } from "./calendar.js";
+import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
 
-// Load client configuration dynamically if present
-let GOOGLE_CLIENT_ID = null;
-(async () => {
-  try {
-    const mod = await import("./config.js");
-    GOOGLE_CLIENT_ID = mod.GOOGLE_CLIENT_ID || null;
-  } catch (_e) {
-    GOOGLE_CLIENT_ID = null;
-  }
-})();
+// Static client ID from config module
+const GOOGLE_CLIENT_ID = CONFIG_CLIENT_ID || null;
 chrome.runtime.onInstalled.addListener(() => {
   // Initialize state when the extension is installed or updated
   console.log("Availability extension installed");
+  try {
+    const redirect = chrome.identity.getRedirectURL();
+    console.log("OAuth redirect URI:", redirect);
+  } catch (_e) {}
 });
 
 chrome.action.onClicked.addListener(async (tab) => {

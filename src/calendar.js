@@ -1,11 +1,12 @@
 // Google Calendar integration using OAuth 2.0 with PKCE
 // Stores tokens in chrome.storage.sync under key 'googleAuth'
+import { GOOGLE_CLIENT_SECRET as CONFIG_CLIENT_SECRET } from "./config.js";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly"
+  "https://www.googleapis.com/auth/calendar.events.readonly"
 ];
 
 async function sha256(buffer) {
@@ -73,16 +74,21 @@ export async function startGoogleAuth(clientId) {
   const code = returnedUrl.searchParams.get("code");
   if (!code) throw new Error("Authorization code missing");
 
+  const tokenParams = new URLSearchParams({
+    client_id: clientId,
+    code,
+    code_verifier: codeVerifier,
+    grant_type: "authorization_code",
+    redirect_uri: redirectUri
+  });
+  if (CONFIG_CLIENT_SECRET && CONFIG_CLIENT_SECRET !== "YOUR_CLIENT_SECRET_IF_REQUIRED") {
+    tokenParams.set("client_secret", CONFIG_CLIENT_SECRET);
+  }
+
   const tokenResp = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      code,
-      code_verifier: codeVerifier,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri
-    })
+    body: tokenParams
   });
 
   if (!tokenResp.ok) {
@@ -112,14 +118,19 @@ export async function getValidAccessToken(clientId) {
 }
 
 export async function refreshAccessToken(clientId, refreshToken) {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token"
+  });
+  if (CONFIG_CLIENT_SECRET && CONFIG_CLIENT_SECRET !== "YOUR_CLIENT_SECRET_IF_REQUIRED") {
+    params.set("client_secret", CONFIG_CLIENT_SECRET);
+  }
+
   const resp = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token"
-    })
+    body: params
   });
   if (!resp.ok) {
     const errText = await resp.text();
