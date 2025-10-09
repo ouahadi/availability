@@ -93,9 +93,11 @@ signOutButton.addEventListener("click", async () => {
 });
 
 // Generate availability button
-document.getElementById("gen-availability").addEventListener("click", async () => {
+const copyBtn = document.getElementById("gen-availability");
+copyBtn.addEventListener("click", async () => {
   statusEl.textContent = "Generating availability...";
   availabilityEl.value = "";
+  copyBtn.disabled = true;
   try {
     await savePrefs();
     const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
@@ -113,6 +115,7 @@ document.getElementById("gen-availability").addEventListener("click", async () =
   } catch (e) {
     statusEl.textContent = `Generation error: ${e?.message || e}`;
   }
+  copyBtn.disabled = false;
 });
 
 // Persist changes when toggles are changed
