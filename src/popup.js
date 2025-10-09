@@ -6,6 +6,7 @@ const accountsSection = document.getElementById("accounts-section");
 const calendarListEl = document.getElementById("calendar-list");
 const refreshCalendarsBtn = document.getElementById("refresh-calendars");
 const availabilityEl = document.getElementById("availability");
+const toastEl = document.getElementById("toast");
 const modeApproachable = document.getElementById("mode-approachable");
 const modeBusy = document.getElementById("mode-busy");
 const ctxPersonal = document.getElementById("ctx-personal");
@@ -103,10 +104,12 @@ document.getElementById("gen-availability").addEventListener("click", async () =
       return;
     }
     availabilityEl.value = res.text;
-    statusEl.textContent = "Generated and copied to clipboard";
+    statusEl.textContent = "Copied to clipboard";
     availabilityEl.focus();
     availabilityEl.select();
     document.execCommand("copy");
+    toastEl.classList.add("show");
+    setTimeout(() => toastEl.classList.remove("show"), 1200);
   } catch (e) {
     statusEl.textContent = `Generation error: ${e?.message || e}`;
   }
@@ -130,25 +133,39 @@ async function renderCalendars() {
     calendarListEl.innerHTML = "";
     for (const cal of list.calendars) {
       const id = `cal-${btoa(cal.id).replace(/=/g, "")}`;
-      const row = document.createElement("label");
-      row.style.display = "flex";
-      row.style.alignItems = "center";
-      row.style.gap = "8px";
+      const wrapper = document.createElement("div");
+      wrapper.className = "account-item";
+      const left = document.createElement("div");
+      left.className = "left";
+      const icon = document.createElement("span");
+      icon.className = "icon";
+      icon.textContent = "📅";
+      const label = document.createElement("label");
+      label.htmlFor = id;
+      label.textContent = cal.summary;
+      left.appendChild(icon);
+      left.appendChild(label);
+      const right = document.createElement("div");
       const cb = document.createElement("input");
       cb.type = "checkbox";
+      cb.className = "visually-hidden";
       cb.id = id;
-      cb.checked = selected.size ? selected.has(cal.id) : !!cal.primary; // default to primary
+      cb.checked = selected.size ? selected.has(cal.id) : !!cal.primary;
+      const check = document.createElement("span");
+      check.className = "check";
+      check.textContent = cb.checked ? "✓" : "";
       cb.addEventListener("change", async () => {
         const newSelected = new Set(selected);
         if (cb.checked) newSelected.add(cal.id); else newSelected.delete(cal.id);
         const arr = Array.from(newSelected);
+        check.textContent = cb.checked ? "✓" : "";
         await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: arr } });
       });
-      const span = document.createElement("span");
-      span.textContent = cal.summary;
-      row.appendChild(cb);
-      row.appendChild(span);
-      calendarListEl.appendChild(row);
+      right.appendChild(cb);
+      right.appendChild(check);
+      wrapper.appendChild(left);
+      wrapper.appendChild(right);
+      calendarListEl.appendChild(wrapper);
     }
   } catch (e) {
     calendarListEl.textContent = String(e?.message || e);
