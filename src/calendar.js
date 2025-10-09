@@ -6,9 +6,10 @@ const CONFIG_CLIENT_SECRET = CONFIG.GOOGLE_CLIENT_SECRET;
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const CALENDAR_EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const CALENDAR_EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars";
+const CALENDAR_LIST_ENDPOINT = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events.readonly"
+  "https://www.googleapis.com/auth/calendar.readonly"
 ];
 
 async function sha256(buffer) {
@@ -153,7 +154,7 @@ export async function refreshAccessToken(clientId, refreshToken) {
 export async function fetchUpcomingEvents(clientId, maxResults = 10) {
   const accessToken = await getValidAccessToken(clientId);
   if (!accessToken) throw new Error("Not authenticated");
-  const url = new URL(CALENDAR_EVENTS_ENDPOINT);
+  const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/primary/events`);
   url.searchParams.set("singleEvents", "true");
   url.searchParams.set("orderBy", "startTime");
   url.searchParams.set("timeMin", new Date().toISOString());
@@ -180,7 +181,7 @@ export async function fetchUpcomingEvents(clientId, maxResults = 10) {
 export async function fetchEventsInRange(clientId, timeMinIso, timeMaxIso) {
   const accessToken = await getValidAccessToken(clientId);
   if (!accessToken) throw new Error("Not authenticated");
-  const url = new URL(CALENDAR_EVENTS_ENDPOINT);
+  const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/primary/events`);
   url.searchParams.set("singleEvents", "true");
   url.searchParams.set("orderBy", "startTime");
   url.searchParams.set("timeMin", timeMinIso);
@@ -203,6 +204,53 @@ export async function fetchEventsInRange(clientId, timeMinIso, timeMaxIso) {
     location: ev.location || null,
     hangoutLink: ev.hangoutLink || null
   }));
+}
+
+export async function fetchCalendarList(clientId) {
+  const accessToken = await getValidAccessToken(clientId);
+  if (!accessToken) throw new Error("Not authenticated");
+  const url = new URL(CALENDAR_LIST_ENDPOINT);
+  url.searchParams.set("minAccessRole", "reader");
+  const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Calendar list failed: ${errText}`);
+  }
+  const data = await resp.json();
+  const items = data.items || [];
+  return items.map(it => ({ id: it.id, summary: it.summaryOverride || it.summary, primary: !!it.primary, accessRole: it.accessRole || "reader" }));
+}
+
+export async function fetchEventsForCalendars(clientId, calendarIds, timeMinIso, timeMaxIso) {
+  const accessToken = await getValidAccessToken(clientId);
+  if (!accessToken) throw new Error("Not authenticated");
+  const ids = (calendarIds && calendarIds.length) ? calendarIds : ["primary"];
+  const all = [];
+  for (const id of ids) {
+    const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(id)}/events`);
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    url.searchParams.set("timeMin", timeMinIso);
+    url.searchParams.set("timeMax", timeMaxIso);
+    url.searchParams.set("maxResults", "2500");
+    const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Events fetch failed: ${errText}`);
+    }
+    const data = await resp.json();
+    const events = (data.items || []).map(ev => ({
+      id: `${id}:${ev.id}`,
+      summary: ev.summary || "(no title)",
+      start: ev.start?.dateTime || ev.start?.date || null,
+      end: ev.end?.dateTime || ev.end?.date || null,
+      location: ev.location || null,
+      hangoutLink: ev.hangoutLink || null
+    }));
+    all.push(...events);
+  }
+  // Sort by start time
+  return all.sort((a, b) => new Date(a.start) - new Date(b.start));
 }
 
 export async function signOutGoogle() {

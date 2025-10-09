@@ -2,6 +2,9 @@ const statusEl = document.getElementById("status");
 const authButton = document.getElementById("google-auth");
 const signOutButton = document.getElementById("google-signout");
 const availabilitySection = document.getElementById("availability-section");
+const accountsSection = document.getElementById("accounts-section");
+const calendarListEl = document.getElementById("calendar-list");
+const refreshCalendarsBtn = document.getElementById("refresh-calendars");
 const availabilityEl = document.getElementById("availability");
 const modeApproachable = document.getElementById("mode-approachable");
 const modeBusy = document.getElementById("mode-busy");
@@ -25,6 +28,7 @@ function showAuthenticatedState() {
   authButton.classList.add("hidden");
   signOutButton.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
+  accountsSection.classList.remove("hidden");
   statusEl.textContent = "Connected to Google Calendar";
 }
 
@@ -32,6 +36,7 @@ function showUnauthenticatedState() {
   authButton.classList.remove("hidden");
   signOutButton.classList.add("hidden");
   availabilitySection.classList.add("hidden");
+  accountsSection.classList.add("hidden");
   statusEl.textContent = "";
 }
 
@@ -43,6 +48,7 @@ async function loadPrefs() {
     modeBusy.checked = mode === "busy";
     ctxPersonal.checked = context === "personal";
     ctxWork.checked = context !== "personal";
+    await renderCalendars();
   }
 }
 
@@ -60,6 +66,7 @@ authButton.addEventListener("click", async () => {
     if (res?.ok) {
       showAuthenticatedState();
       await loadPrefs();
+      await renderCalendars();
     } else {
       statusEl.textContent = `Connection failed: ${res?.error || ""}`;
     }
@@ -109,6 +116,46 @@ document.getElementById("gen-availability").addEventListener("click", async () =
 for (const el of [modeApproachable, modeBusy, ctxPersonal, ctxWork]) {
   el.addEventListener("change", savePrefs);
 }
+
+async function renderCalendars() {
+  calendarListEl.innerHTML = "Loading...";
+  try {
+    const list = await chrome.runtime.sendMessage({ type: "LIST_CALENDARS" });
+    if (!list?.ok) {
+      calendarListEl.textContent = list?.error || "Failed to load";
+      return;
+    }
+    const { prefs } = await chrome.storage.sync.get(["prefs"]);
+    const selected = new Set((prefs?.selectedCalendars) || []);
+    calendarListEl.innerHTML = "";
+    for (const cal of list.calendars) {
+      const id = `cal-${btoa(cal.id).replace(/=/g, "")}`;
+      const row = document.createElement("label");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.id = id;
+      cb.checked = selected.size ? selected.has(cal.id) : !!cal.primary; // default to primary
+      cb.addEventListener("change", async () => {
+        const newSelected = new Set(selected);
+        if (cb.checked) newSelected.add(cal.id); else newSelected.delete(cal.id);
+        const arr = Array.from(newSelected);
+        await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: arr } });
+      });
+      const span = document.createElement("span");
+      span.textContent = cal.summary;
+      row.appendChild(cb);
+      row.appendChild(span);
+      calendarListEl.appendChild(row);
+    }
+  } catch (e) {
+    calendarListEl.textContent = String(e?.message || e);
+  }
+}
+
+refreshCalendarsBtn.addEventListener("click", renderCalendars);
 
 // Initialize
 checkAuthStatus();

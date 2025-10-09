@@ -1,5 +1,5 @@
 // Background service worker (MV3)
-import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, signOutGoogle } from "./calendar.js";
+import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, fetchCalendarList, fetchEventsForCalendars, signOutGoogle } from "./calendar.js";
 import { generateAvailability } from "./availability.js";
 import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
 
@@ -81,9 +81,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const start = new Date(now);
         const end = new Date(now);
         end.setDate(end.getDate() + 14);
-        const events = await fetchEventsInRange(GOOGLE_CLIENT_ID, start.toISOString(), end.toISOString());
+        const { prefs } = await chrome.storage.sync.get(["prefs"]);
+        const selectedCalendars = prefs?.selectedCalendars || null;
+        const events = await fetchEventsForCalendars(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString());
         const text = await generateAvailability(events, start, end);
         sendResponse({ ok: true, text });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "LIST_CALENDARS") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const list = await fetchCalendarList(GOOGLE_CLIENT_ID);
+        sendResponse({ ok: true, calendars: list });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }

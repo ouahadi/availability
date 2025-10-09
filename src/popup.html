@@ -123,6 +123,14 @@
         <p class="subtitle">Generate your calendar availability</p>
       </div>
       
+      <div class="availability-section hidden" id="accounts-section" style="margin-bottom: 16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div class="availability-label">Connected Accounts</div>
+          <button id="refresh-calendars" class="button secondary" style="width:auto; padding:8px 12px;">Refresh</button>
+        </div>
+        <div id="calendar-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
       <div class="auth-section">
         <button id="google-auth" class="button">Connect Google Calendar</button>
         <button id="google-signout" class="button secondary hidden">Sign out</button>
