@@ -20,10 +20,33 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.type === "PING") {
-    const reply = { message: "PONG from background" };
-    sendResponse(reply);
-    chrome.runtime.sendMessage({ type: "PONG", message: reply.message });
+  if (message && message.type === "GET_PREFS") {
+    (async () => {
+      const { prefs } = await chrome.storage.sync.get(["prefs"]);
+      const defaults = { mode: "approachable", context: "work", maxSlots: 3 };
+      sendResponse({ ok: true, prefs: { ...defaults, ...(prefs || {}) } });
+    })();
+    return true;
+  }
+  if (message && message.type === "SET_PREFS") {
+    (async () => {
+      const current = (await chrome.storage.sync.get(["prefs"])).prefs || {};
+      const updated = { ...current, ...(message.prefs || {}) };
+      await chrome.storage.sync.set({ prefs: updated });
+      sendResponse({ ok: true, prefs: updated });
+    })();
+    return true;
+  }
+  if (message && message.type === "CHECK_AUTH_STATUS") {
+    (async () => {
+      try {
+        const { googleAuth } = await chrome.storage.sync.get(["googleAuth"]);
+        const authenticated = googleAuth && googleAuth.access_token;
+        sendResponse({ authenticated });
+      } catch (e) {
+        sendResponse({ authenticated: false });
+      }
+    })();
     return true;
   }
   if (message && message.type === "GOOGLE_AUTH") {

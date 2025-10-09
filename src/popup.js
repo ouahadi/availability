@@ -1,82 +1,116 @@
 const statusEl = document.getElementById("status");
-document.getElementById("ping").addEventListener("click", async () => {
-  statusEl.textContent = "Pinging...";
+const authButton = document.getElementById("google-auth");
+const signOutButton = document.getElementById("google-signout");
+const availabilitySection = document.getElementById("availability-section");
+const availabilityEl = document.getElementById("availability");
+const modeApproachable = document.getElementById("mode-approachable");
+const modeBusy = document.getElementById("mode-busy");
+const ctxPersonal = document.getElementById("ctx-personal");
+const ctxWork = document.getElementById("ctx-work");
+
+// Check if already authenticated on load
+async function checkAuthStatus() {
   try {
-    const response = await chrome.runtime.sendMessage({ type: "PING" });
-    statusEl.textContent = response?.message ?? "No response";
+    const res = await chrome.runtime.sendMessage({ type: "CHECK_AUTH_STATUS" });
+    if (res?.authenticated) {
+      showAuthenticatedState();
+      await loadPrefs();
+    }
   } catch (e) {
-    statusEl.textContent = "Error";
+    // Ignore errors on startup
   }
-});
+}
 
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type === "PONG") {
-    statusEl.textContent = msg.message;
+function showAuthenticatedState() {
+  authButton.classList.add("hidden");
+  signOutButton.classList.remove("hidden");
+  availabilitySection.classList.remove("hidden");
+  statusEl.textContent = "Connected to Google Calendar";
+}
+
+function showUnauthenticatedState() {
+  authButton.classList.remove("hidden");
+  signOutButton.classList.add("hidden");
+  availabilitySection.classList.add("hidden");
+  statusEl.textContent = "";
+}
+
+async function loadPrefs() {
+  const res = await chrome.runtime.sendMessage({ type: "GET_PREFS" });
+  if (res?.ok) {
+    const { mode = "approachable", context = "work" } = res.prefs || {};
+    modeApproachable.checked = mode === "approachable";
+    modeBusy.checked = mode === "busy";
+    ctxPersonal.checked = context === "personal";
+    ctxWork.checked = context !== "personal";
   }
-});
+}
 
-const eventsList = document.getElementById("events");
-document.getElementById("google-auth").addEventListener("click", async () => {
-  statusEl.textContent = "Authorizing...";
+async function savePrefs() {
+  const mode = modeBusy.checked ? "busy" : "approachable";
+  const context = ctxPersonal.checked ? "personal" : "work";
+  await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context } });
+}
+
+// Auth button
+authButton.addEventListener("click", async () => {
+  statusEl.textContent = "Connecting...";
   try {
     const res = await chrome.runtime.sendMessage({ type: "GOOGLE_AUTH" });
-    statusEl.textContent = res?.ok ? "Authorized" : `Auth error: ${res?.error || ""}`;
+    if (res?.ok) {
+      showAuthenticatedState();
+      await loadPrefs();
+    } else {
+      statusEl.textContent = `Connection failed: ${res?.error || ""}`;
+    }
   } catch (e) {
-    statusEl.textContent = `Auth error: ${e?.message || e}`;
+    statusEl.textContent = `Connection error: ${e?.message || e}`;
   }
 });
 
-document.getElementById("google-events").addEventListener("click", async () => {
-  statusEl.textContent = "Loading events...";
-  try {
-    const res = await chrome.runtime.sendMessage({ type: "GOOGLE_LIST_EVENTS", maxResults: 10 });
-    if (!res?.ok) {
-      statusEl.textContent = `Load error: ${res?.error || ""}`;
-      return;
-    }
-    statusEl.textContent = `Loaded ${res.events.length}`;
-    eventsList.innerHTML = "";
-    for (const ev of res.events) {
-      const li = document.createElement("li");
-      const when = ev.start ? new Date(ev.start).toLocaleString() : "(no time)";
-      const loc = ev.location ? ` @ ${ev.location}` : "";
-      li.textContent = `${when} — ${ev.summary}${loc}`;
-      eventsList.appendChild(li);
-    }
-  } catch (e) {
-    statusEl.textContent = `Load error: ${e?.message || e}`;
-  }
-});
-
-document.getElementById("google-signout").addEventListener("click", async () => {
+// Sign out button
+signOutButton.addEventListener("click", async () => {
   statusEl.textContent = "Signing out...";
   try {
     const res = await chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" });
-    statusEl.textContent = res?.ok ? "Signed out" : `Sign out error: ${res?.error || ""}`;
+    if (res?.ok) {
+      showUnauthenticatedState();
+      availabilityEl.value = "";
+    } else {
+      statusEl.textContent = `Sign out failed: ${res?.error || ""}`;
+    }
   } catch (e) {
     statusEl.textContent = `Sign out error: ${e?.message || e}`;
   }
-  eventsList.innerHTML = "";
 });
 
-const availabilityEl = document.getElementById("availability");
+// Generate availability button
 document.getElementById("gen-availability").addEventListener("click", async () => {
   statusEl.textContent = "Generating availability...";
   availabilityEl.value = "";
   try {
+    await savePrefs();
     const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
     if (!res?.ok) {
-      statusEl.textContent = `Availability error: ${res?.error || ""}`;
+      statusEl.textContent = `Generation failed: ${res?.error || ""}`;
       return;
     }
     availabilityEl.value = res.text;
-    statusEl.textContent = "Done";
+    statusEl.textContent = "Generated and copied to clipboard";
     availabilityEl.focus();
     availabilityEl.select();
     document.execCommand("copy");
   } catch (e) {
-    statusEl.textContent = `Availability error: ${e?.message || e}`;
+    statusEl.textContent = `Generation error: ${e?.message || e}`;
   }
 });
+
+// Persist changes when toggles are changed
+for (const el of [modeApproachable, modeBusy, ctxPersonal, ctxWork]) {
+  el.addEventListener("change", savePrefs);
+}
+
+// Initialize
+checkAuthStatus();
 
 
