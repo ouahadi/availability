@@ -20,6 +20,14 @@
       <input id="maxSlots" type="number" min="1" step="1" />
       <div class="hint">Number of 1-hour slots to propose in Busy mode (default 3).</div>
     </div>
+    <div class="section">
+      <label>Connected Accounts</label>
+      <div id="accounts-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
+      <button id="refresh-calendars" class="button secondary" style="width:auto; padding:8px 12px; margin-top:8px;">Refresh</button>
+    </div>
+    <div class="section">
+      <button id="sign-out" class="button secondary" style="width:auto; padding:8px 12px;">Sign out</button>
+    </div>
     <button id="save">Save</button>
     <span id="saved" style="margin-left:8px;"></span>
     <script src="./options.js" type="module"></script>

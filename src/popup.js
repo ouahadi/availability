@@ -2,15 +2,14 @@ const statusEl = document.getElementById("status");
 const authButton = document.getElementById("google-auth");
 const signOutButton = document.getElementById("google-signout");
 const availabilitySection = document.getElementById("availability-section");
-const accountsSection = document.getElementById("accounts-section");
-const calendarListEl = document.getElementById("calendar-list");
-const refreshCalendarsBtn = document.getElementById("refresh-calendars");
 const availabilityEl = document.getElementById("availability");
 const toastEl = document.getElementById("toast");
 const modeApproachable = document.getElementById("mode-approachable");
 const modeBusy = document.getElementById("mode-busy");
 const ctxPersonal = document.getElementById("ctx-personal");
 const ctxWork = document.getElementById("ctx-work");
+const modeSwitch = document.getElementById("mode-switch");
+const contextSegment = document.getElementById("context-segment");
 
 // Check if already authenticated on load
 async function checkAuthStatus() {
@@ -29,7 +28,6 @@ function showAuthenticatedState() {
   authButton.classList.add("hidden");
   signOutButton.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
-  accountsSection.classList.remove("hidden");
   statusEl.textContent = "Connected to Google Calendar";
 }
 
@@ -37,7 +35,6 @@ function showUnauthenticatedState() {
   authButton.classList.remove("hidden");
   signOutButton.classList.add("hidden");
   availabilitySection.classList.add("hidden");
-  accountsSection.classList.add("hidden");
   statusEl.textContent = "";
 }
 
@@ -49,7 +46,11 @@ async function loadPrefs() {
     modeBusy.checked = mode === "busy";
     ctxPersonal.checked = context === "personal";
     ctxWork.checked = context !== "personal";
-    await renderCalendars();
+    // Reflect on custom controls
+    modeSwitch.classList.toggle("on", mode === "busy");
+    for (const btn of contextSegment.querySelectorAll("button")) {
+      btn.classList.toggle("active", btn.dataset.value === context);
+    }
   }
 }
 
@@ -67,7 +68,6 @@ authButton.addEventListener("click", async () => {
     if (res?.ok) {
       showAuthenticatedState();
       await loadPrefs();
-      await renderCalendars();
     } else {
       statusEl.textContent = `Connection failed: ${res?.error || ""}`;
     }
@@ -123,59 +123,26 @@ for (const el of [modeApproachable, modeBusy, ctxPersonal, ctxWork]) {
   el.addEventListener("change", savePrefs);
 }
 
-async function renderCalendars() {
-  calendarListEl.innerHTML = "Loading...";
-  try {
-    const list = await chrome.runtime.sendMessage({ type: "LIST_CALENDARS" });
-    if (!list?.ok) {
-      calendarListEl.textContent = list?.error || "Failed to load";
-      return;
-    }
-    const { prefs } = await chrome.storage.sync.get(["prefs"]);
-    const selected = new Set((prefs?.selectedCalendars) || []);
-    calendarListEl.innerHTML = "";
-    for (const cal of list.calendars) {
-      const id = `cal-${btoa(cal.id).replace(/=/g, "")}`;
-      const wrapper = document.createElement("div");
-      wrapper.className = "account-item";
-      const left = document.createElement("div");
-      left.className = "left";
-      const icon = document.createElement("span");
-      icon.className = "icon";
-      icon.textContent = "📅";
-      const label = document.createElement("label");
-      label.htmlFor = id;
-      label.textContent = cal.summary;
-      left.appendChild(icon);
-      left.appendChild(label);
-      const right = document.createElement("div");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.className = "visually-hidden";
-      cb.id = id;
-      cb.checked = selected.size ? selected.has(cal.id) : !!cal.primary;
-      const check = document.createElement("span");
-      check.className = "check";
-      check.textContent = cb.checked ? "✓" : "";
-      cb.addEventListener("change", async () => {
-        const newSelected = new Set(selected);
-        if (cb.checked) newSelected.add(cal.id); else newSelected.delete(cal.id);
-        const arr = Array.from(newSelected);
-        check.textContent = cb.checked ? "✓" : "";
-        await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: arr } });
-      });
-      right.appendChild(cb);
-      right.appendChild(check);
-      wrapper.appendChild(left);
-      wrapper.appendChild(right);
-      calendarListEl.appendChild(wrapper);
-    }
-  } catch (e) {
-    calendarListEl.textContent = String(e?.message || e);
-  }
-}
+// Custom switch and segmented control wiring
+modeSwitch.addEventListener("click", async () => {
+  const isBusy = !modeSwitch.classList.contains("on");
+  modeSwitch.classList.toggle("on", isBusy);
+  modeBusy.checked = isBusy;
+  modeApproachable.checked = !isBusy;
+  await savePrefs();
+});
 
-refreshCalendarsBtn.addEventListener("click", renderCalendars);
+contextSegment.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  for (const b of contextSegment.querySelectorAll("button")) b.classList.remove("active");
+  btn.classList.add("active");
+  const val = btn.dataset.value;
+  ctxPersonal.checked = val === "personal";
+  ctxWork.checked = val !== "personal";
+  await savePrefs();
+});
+
 
 // Initialize
 checkAuthStatus();
