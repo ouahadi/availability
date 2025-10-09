@@ -6,16 +6,20 @@
     <title>Availability Options</title>
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
-      label { display: block; margin-bottom: 12px; }
-      input[type="text"] { width: 320px; padding: 6px 8px; }
+      .section { margin-bottom: 20px; }
+      label { display: block; margin-bottom: 8px; font-weight: 600; }
+      input[type="text"], input[type="number"] { width: 220px; padding: 6px 8px; }
+      .hint { font-size: 12px; color: #555; margin-top: 6px; }
+      button { padding: 6px 10px; }
     </style>
   </head>
   <body>
     <h1>Availability Options</h1>
-    <label>
-      Greeting text
-      <input id="greeting" type="text" placeholder="Hello!" />
-    </label>
+    <div class="section">
+      <label for="maxSlots">Max slots when Busy</label>
+      <input id="maxSlots" type="number" min="1" step="1" />
+      <div class="hint">Number of 1-hour slots to propose in Busy mode (default 3).</div>
+    </div>
     <button id="save">Save</button>
     <span id="saved" style="margin-left:8px;"></span>
     <script src="./options.js" type="module"></script>

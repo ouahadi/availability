@@ -138,7 +138,9 @@ export async function generateAvailability(events, startDate, endDate, options =
   const holidays = await fetchUkHolidaysSet();
   const now = new Date();
   const out = [];
+  let remainingSlots = Math.max(0, Number(maxSlots) || 0);
   for (let d = startOfDayLocal(startDate); d <= endDate; d = addDays(d, 1)) {
+    if (mode === "busy" && remainingSlots <= 0) break;
     const { start: rawStart, end: rawEnd } = getDayWindow(d, context);
     if (!rawStart || !rawEnd) continue; // skip days outside context
 
@@ -198,10 +200,11 @@ export async function generateAvailability(events, startDate, endDate, options =
         busyEdges.add(b.end?.getTime());
       }
       const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
-      const limited = adjacent.slice(0, Math.max(1, maxSlots));
+      const limited = adjacent.slice(0, Math.max(0, remainingSlots));
       if (limited.length) {
         const line = `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })} - ${limited.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
         out.push(line);
+        remainingSlots -= limited.length;
       }
       continue;
     }
