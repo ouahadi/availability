@@ -84,7 +84,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { prefs } = await chrome.storage.sync.get(["prefs"]);
         const selectedCalendars = prefs?.selectedCalendars || null;
         const events = await fetchEventsForCalendars(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString());
-        const text = await generateAvailability(events, start, end);
+        const prefsSafe = { mode: (prefs?.mode)||"approachable", context: (prefs?.context)||"work", maxSlots: Number(prefs?.maxSlots)||3 };
+        const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });

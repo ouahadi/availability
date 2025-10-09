@@ -97,7 +97,7 @@ function formatDayAvailability(date, freeIntervals) {
   const mostDay = totalFreeMs >= 5 * 60 * 60 * 1000; // 5+ hours
   if (fullDay) return `${dayName}, ${dateStr} - Anytime`;
   if (mostDay) {
-    // Phrase as Most of the day, except ... if a single mid-day block is busy
+    // Phrase as Most of the day
     return `${dayName}, ${dateStr} - Most of the day`;
   }
   return `${dayName}, ${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
@@ -107,19 +107,46 @@ function fmtTime(d) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-export async function generateAvailability(events, startDate, endDate) {
+function getDayWindow(date, context) {
+  const dow = date.getDay(); // 0 Sun, 6 Sat
+  if (context === "personal") {
+    if (dow === 0 || dow === 6) {
+      // weekends 10:00-22:00
+      return { start: setTimeLocal(date, 10, 0), end: setTimeLocal(date, 22, 0) };
+    }
+    // weekdays evenings 18:00-22:00
+    return { start: setTimeLocal(date, 18, 0), end: setTimeLocal(date, 22, 0) };
+  }
+  // work context, weekdays only
+  if (dow === 0 || dow === 6) return { start: null, end: null };
+  return { start: setTimeLocal(date, 10, 0), end: setTimeLocal(date, 18, 0) };
+}
+
+function splitIntoHourSlots(freeIntervals) {
+  const slots = [];
+  for (const { start, end } of freeIntervals) {
+    for (let t = new Date(start); t < end; t = new Date(t.getTime() + 60 * 60 * 1000)) {
+      const nxt = new Date(t.getTime() + 60 * 60 * 1000);
+      if (nxt <= end) slots.push({ start: new Date(t), end: nxt });
+    }
+  }
+  return slots;
+}
+
+export async function generateAvailability(events, startDate, endDate, options = {}) {
+  const { context = "work", mode = "approachable", maxSlots = 3 } = options;
   const holidays = await fetchUkHolidaysSet();
   const now = new Date();
   const out = [];
   for (let d = startOfDayLocal(startDate); d <= endDate; d = addDays(d, 1)) {
-    // Skip weekends
-    const dow = d.getDay(); // 0 Sun, 6 Sat
-    if (dow === 0 || dow === 6) continue;
+    const { start: rawStart, end: rawEnd } = getDayWindow(d, context);
+    if (!rawStart || !rawEnd) continue; // skip days outside context
 
     const isoDate = d.toISOString().slice(0, 10);
-    if (holidays.has(isoDate)) continue; // skip UK holiday
-    let windowStart = setTimeLocal(d, 10, 0);
-    const windowEnd = setTimeLocal(d, 18, 0);
+    if (context === "work" && holidays.has(isoDate)) continue; // skip UK holiday for work
+
+    let windowStart = rawStart;
+    const windowEnd = rawEnd;
 
     // For today, trim past time and round up to next full hour
     if (isSameDay(d, now)) {
@@ -132,6 +159,7 @@ export async function generateAvailability(events, startDate, endDate) {
     }
 
     if (windowStart >= windowEnd) continue; // no time left today
+
     // build busy with padding for travel if needed
     const dayEvents = events.filter(ev => {
       const s = toLocalDate(ev.start);
@@ -146,7 +174,7 @@ export async function generateAvailability(events, startDate, endDate) {
         s = new Date(s.getTime() - 60 * 60 * 1000);
         e = new Date(e.getTime() + 60 * 60 * 1000);
       }
-      // clip to business window
+      // clip to window
       if (e <= windowStart || s >= windowEnd) continue;
       busy.push({ start: new Date(Math.max(s.getTime(), windowStart.getTime())), end: new Date(Math.min(e.getTime(), windowEnd.getTime())) });
     }
@@ -160,6 +188,23 @@ export async function generateAvailability(events, startDate, endDate) {
       if (e.getMinutes() !== 0) e.setHours(e.getHours(), 0, 0, 0);
       return { start: s, end: e };
     }).filter(({ start, end }) => (end - start) >= 60 * 60 * 1000);
+
+    if (mode === "busy") {
+      const hourSlots = splitIntoHourSlots(free);
+      // adjacency: slot touches any busy edge
+      const busyEdges = new Set();
+      for (const b of mergedBusy) {
+        busyEdges.add(b.start?.getTime());
+        busyEdges.add(b.end?.getTime());
+      }
+      const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
+      const limited = adjacent.slice(0, Math.max(1, maxSlots));
+      if (limited.length) {
+        const line = `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })} - ${limited.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+        out.push(line);
+      }
+      continue;
+    }
 
     if (free.length) out.push(formatDayAvailability(d, free));
   }
