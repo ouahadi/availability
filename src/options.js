@@ -4,6 +4,7 @@ const savedEl = document.getElementById("saved");
 const accountsListEl = document.getElementById("accounts-list");
 const refreshCalendarsBtn = document.getElementById("refresh-calendars");
 const signOutBtn = document.getElementById("sign-out");
+const addGoogleAccountBtn = document.getElementById("add-google-account");
 
 // Debug elements
 const debugEventsBtn = document.getElementById("debug-events");
@@ -15,7 +16,7 @@ async function load() {
   const { prefs } = await chrome.storage.sync.get(["prefs"]);
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
-  await renderCalendars();
+  await renderAccounts();
 }
 
 async function save() {
@@ -27,78 +28,202 @@ async function save() {
   setTimeout(() => (savedEl.textContent = ""), 1200);
 }
 
-async function renderCalendars() {
+async function renderAccounts() {
   accountsListEl.innerHTML = "Loading...";
   try {
-    const list = await chrome.runtime.sendMessage({ type: "LIST_CALENDARS" });
-    if (!list?.ok) {
-      accountsListEl.textContent = list?.error || "Failed to load";
+    // Load accounts
+    const accountsResponse = await chrome.runtime.sendMessage({ type: "LIST_ACCOUNTS" });
+    if (!accountsResponse?.ok) {
+      accountsListEl.textContent = accountsResponse?.error || "Failed to load accounts";
       return;
     }
+
+    // Load calendars
+    const calendarsResponse = await chrome.runtime.sendMessage({ type: "LIST_CALENDARS" });
+    if (!calendarsResponse?.ok) {
+      accountsListEl.textContent = calendarsResponse?.error || "Failed to load calendars";
+      return;
+    }
+
     const { prefs } = await chrome.storage.sync.get(["prefs"]);
-    const selected = new Set((prefs?.selectedCalendars) || []);
+    const selectedCalendars = new Set((prefs?.selectedCalendars) || []);
+    const activeAccounts = new Set((prefs?.activeAccounts) || []);
+
     accountsListEl.innerHTML = "";
-    for (const cal of list.calendars) {
-      const id = `cal-${btoa(cal.id).replace(/=/g, "")}`;
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "flex";
-      wrapper.style.alignItems = "center";
-      wrapper.style.justifyContent = "space-between";
-      wrapper.style.gap = "10px";
-      wrapper.style.padding = "10px 12px";
-      wrapper.style.borderRadius = "10px";
-      wrapper.style.background = "#f5f5f5";
-      wrapper.style.border = "1px solid #ddd";
-      const left = document.createElement("div");
-      left.style.display = "flex";
-      left.style.alignItems = "center";
-      left.style.gap = "8px";
-      const icon = document.createElement("span");
-      icon.textContent = "📅";
-      const label = document.createElement("label");
-      label.htmlFor = id;
-      label.textContent = cal.summary;
-      left.appendChild(icon);
-      left.appendChild(label);
-      const right = document.createElement("div");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.id = id;
-      cb.checked = selected.size ? selected.has(cal.id) : !!cal.primary;
-      const check = document.createElement("span");
-      check.textContent = cb.checked ? "✓" : "";
-      check.style.width = "18px";
-      check.style.height = "18px";
-      check.style.borderRadius = "50%";
-      check.style.border = "1px solid #ccc";
-      check.style.display = "inline-flex";
-      check.style.alignItems = "center";
-      check.style.justifyContent = "center";
-      check.style.fontSize = "12px";
-      check.style.color = "#0f0";
-      cb.addEventListener("change", async () => {
-        const newSelected = new Set(selected);
-        if (cb.checked) newSelected.add(cal.id); else newSelected.delete(cal.id);
-        const arr = Array.from(newSelected);
-        check.textContent = cb.checked ? "✓" : "";
-        await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: arr } });
+
+    // Render accounts
+    for (const account of accountsResponse.accounts) {
+      const accountWrapper = document.createElement("div");
+      accountWrapper.style.marginBottom = "16px";
+      
+      // Simple account header
+      const accountHeader = document.createElement("div");
+      accountHeader.style.display = "flex";
+      accountHeader.style.alignItems = "center";
+      accountHeader.style.justifyContent = "space-between";
+      accountHeader.style.padding = "10px 12px";
+      accountHeader.style.borderRadius = "6px";
+      accountHeader.style.background = activeAccounts.has(account.id) ? "#e8f0fe" : "#f8f9fa";
+      accountHeader.style.border = `1px solid ${activeAccounts.has(account.id) ? "#4285f4" : "#ddd"}`;
+      accountHeader.style.marginBottom = "8px";
+
+      // Account info
+      const accountInfo = document.createElement("div");
+      accountInfo.textContent = `${account.name || account.email} (${account.email})`;
+      accountInfo.style.fontSize = "14px";
+      accountInfo.style.fontWeight = activeAccounts.has(account.id) ? "600" : "400";
+
+      // Account actions
+      const accountActions = document.createElement("div");
+      accountActions.style.display = "flex";
+      accountActions.style.alignItems = "center";
+      accountActions.style.gap = "8px";
+
+      // Active toggle
+      const activeToggle = document.createElement("input");
+      activeToggle.type = "checkbox";
+      activeToggle.checked = activeAccounts.has(account.id);
+      activeToggle.style.margin = "0";
+      activeToggle.addEventListener("change", async () => {
+        await chrome.runtime.sendMessage({ 
+          type: "TOGGLE_ACCOUNT_ACTIVE", 
+          accountId: account.id,
+          active: activeToggle.checked
+        });
+        await renderAccounts();
       });
-      right.appendChild(cb);
-      right.appendChild(check);
-      wrapper.appendChild(left);
-      wrapper.appendChild(right);
-      accountsListEl.appendChild(wrapper);
+
+      // Remove button
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "Remove";
+      removeBtn.style.background = "none";
+      removeBtn.style.border = "1px solid #dc3545";
+      removeBtn.style.color = "#dc3545";
+      removeBtn.style.cursor = "pointer";
+      removeBtn.style.fontSize = "12px";
+      removeBtn.style.padding = "4px 8px";
+      removeBtn.style.borderRadius = "4px";
+      
+      removeBtn.addEventListener("click", async () => {
+        if (confirm(`Remove ${account.email}?`)) {
+          const response = await chrome.runtime.sendMessage({ type: "REMOVE_ACCOUNT", accountId: account.id });
+          if (response?.ok) {
+            await renderAccounts();
+          } else {
+            alert(`Failed to remove account: ${response?.error || "Unknown error"}`);
+          }
+        }
+      });
+
+      accountActions.appendChild(activeToggle);
+      accountActions.appendChild(removeBtn);
+      
+      accountHeader.appendChild(accountInfo);
+      accountHeader.appendChild(accountActions);
+      accountWrapper.appendChild(accountHeader);
+
+      // Render calendars for this account (only if active)
+      const accountCalendars = calendarsResponse.calendars.filter(cal => cal.accountId === account.id);
+      if (accountCalendars.length > 0 && activeAccounts.has(account.id)) {
+        const calendarsContainer = document.createElement("div");
+        calendarsContainer.style.marginTop = "8px";
+        calendarsContainer.style.marginLeft = "16px";
+        
+        for (const cal of accountCalendars) {
+          const calId = `cal-${btoa(cal.id).replace(/=/g, "")}`;
+          const calWrapper = document.createElement("div");
+          calWrapper.style.display = "flex";
+          calWrapper.style.alignItems = "center";
+          calWrapper.style.justifyContent = "space-between";
+          calWrapper.style.gap = "10px";
+          calWrapper.style.padding = "6px 10px";
+          calWrapper.style.borderRadius = "4px";
+          calWrapper.style.background = "#f5f5f5";
+          calWrapper.style.border = "1px solid #ddd";
+          calWrapper.style.fontSize = "12px";
+          calWrapper.style.marginBottom = "2px";
+
+          const calLabel = document.createElement("label");
+          calLabel.htmlFor = calId;
+          calLabel.textContent = cal.summary;
+          calLabel.style.cursor = "pointer";
+          calLabel.style.flex = "1";
+
+          const calCheckbox = document.createElement("input");
+          calCheckbox.type = "checkbox";
+          calCheckbox.id = calId;
+          calCheckbox.checked = selectedCalendars.has(cal.id);
+          calCheckbox.style.cursor = "pointer";
+          calCheckbox.addEventListener("change", async () => {
+            const newSelected = new Set(selectedCalendars);
+            if (calCheckbox.checked) {
+              newSelected.add(cal.id);
+            } else {
+              newSelected.delete(cal.id);
+            }
+            await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: Array.from(newSelected) } });
+          });
+
+          calWrapper.appendChild(calLabel);
+          calWrapper.appendChild(calCheckbox);
+          calendarsContainer.appendChild(calWrapper);
+        }
+        accountWrapper.appendChild(calendarsContainer);
+      }
+
+      accountsListEl.appendChild(accountWrapper);
+    }
+
+    if (accountsResponse.accounts.length === 0) {
+      accountsListEl.innerHTML = `
+        <div style="text-align:center; color:#666; padding:40px 20px; border:2px dashed #ddd; border-radius:8px; background:#fafafa;">
+          <div style="font-size:48px; margin-bottom:12px;">📅</div>
+          <div style="font-size:16px; font-weight:500; margin-bottom:8px;">No accounts connected</div>
+          <div style="font-size:14px;">Add a Google account to get started</div>
+        </div>
+      `;
     }
   } catch (e) {
-    accountsListEl.textContent = String(e?.message || e);
+    accountsListEl.innerHTML = `
+      <div style="text-align:center; color:#dc3545; padding:20px; border:1px solid #f5c6cb; border-radius:8px; background:#f8d7da;">
+        <div style="font-weight:500; margin-bottom:4px;">Error loading accounts</div>
+        <div style="font-size:12px;">${String(e?.message || e)}</div>
+      </div>
+    `;
   }
 }
+
+addGoogleAccountBtn.addEventListener("click", async () => {
+  try {
+    addGoogleAccountBtn.textContent = "Adding...";
+    addGoogleAccountBtn.disabled = true;
+    
+    const res = await chrome.runtime.sendMessage({ type: "ADD_GOOGLE_ACCOUNT" });
+    if (res?.success) {
+      await renderAccounts();
+      addGoogleAccountBtn.textContent = "Added ✓";
+      setTimeout(() => {
+        addGoogleAccountBtn.textContent = "+ Add Google Account";
+        addGoogleAccountBtn.disabled = false;
+      }, 2000);
+    } else {
+      alert(`Failed to add account: ${res?.error || "Unknown error"}`);
+      addGoogleAccountBtn.textContent = "+ Add Google Account";
+      addGoogleAccountBtn.disabled = false;
+    }
+  } catch (e) {
+    alert(`Error: ${e?.message || e}`);
+    addGoogleAccountBtn.textContent = "+ Add Google Account";
+    addGoogleAccountBtn.disabled = false;
+  }
+});
 
 signOutBtn.addEventListener("click", async () => {
   try {
     const res = await chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" });
     if (res?.ok) {
       signOutBtn.textContent = "Signed out";
+      await renderAccounts(); // Refresh accounts list
       setTimeout(() => window.close(), 1000);
     } else {
       alert(`Sign out failed: ${res?.error || ""}`);
@@ -244,12 +369,12 @@ async function debugAvailabilitySlots() {
 }
 
 // Event listeners
+saveBtn.addEventListener("click", save);
+refreshCalendarsBtn.addEventListener("click", renderAccounts);
 debugEventsBtn.addEventListener("click", debugCalendarEvents);
 debugAvailabilityBtn.addEventListener("click", debugAvailabilitySlots);
 debugClearBtn.addEventListener("click", clearDebugOutput);
 
-saveBtn.addEventListener("click", save);
-refreshCalendarsBtn.addEventListener("click", renderCalendars);
 load();
 
 

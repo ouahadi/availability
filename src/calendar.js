@@ -221,36 +221,233 @@ export async function fetchCalendarList(clientId) {
   return items.map(it => ({ id: it.id, summary: it.summaryOverride || it.summary, primary: !!it.primary, accessRole: it.accessRole || "reader" }));
 }
 
+// Multi-account calendar list fetching
+export async function fetchCalendarListForAccounts(clientId, accountIds) {
+  if (!accountIds || accountIds.length === 0) {
+    return await fetchCalendarList(clientId);
+  }
+
+  const allCalendars = [];
+  
+  for (const accountId of accountIds) {
+    try {
+      const accessToken = await getValidAccessTokenForAccount(accountId, clientId);
+      if (!accessToken) continue;
+
+      const url = new URL(CALENDAR_LIST_ENDPOINT);
+      url.searchParams.set("minAccessRole", "reader");
+      
+      const resp = await fetch(url.toString(), { 
+        headers: { Authorization: `Bearer ${accessToken}` } 
+      });
+      
+      if (!resp.ok) continue;
+      
+      const data = await resp.json();
+      const items = data.items || [];
+      const calendars = items.map(it => ({ 
+        id: `${accountId}:${it.id}`, // Prefix with account ID
+        originalId: it.id,
+        accountId,
+        summary: it.summaryOverride || it.summary, 
+        primary: !!it.primary, 
+        accessRole: it.accessRole || "reader",
+        backgroundColor: it.backgroundColor,
+        foregroundColor: it.foregroundColor
+      }));
+      allCalendars.push(...calendars);
+    } catch (error) {
+      console.error(`Failed to fetch calendars for account ${accountId}:`, error);
+    }
+  }
+  
+  return allCalendars;
+}
+
 export async function fetchEventsForCalendars(clientId, calendarIds, timeMinIso, timeMaxIso) {
   const accessToken = await getValidAccessToken(clientId);
   if (!accessToken) throw new Error("Not authenticated");
   const ids = (calendarIds && calendarIds.length) ? calendarIds : ["primary"];
   const all = [];
   for (const id of ids) {
-    const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(id)}/events`);
-    url.searchParams.set("singleEvents", "true");
-    url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("timeMin", timeMinIso);
-    url.searchParams.set("timeMax", timeMaxIso);
-    url.searchParams.set("maxResults", "2500");
-    const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`Events fetch failed: ${errText}`);
+    // Handle special calendar IDs
+    let calendarId = id;
+    if (id.includes('@') && id.includes('gmail.com')) {
+      // This is likely a primary calendar email, use 'primary' instead
+      calendarId = 'primary';
     }
-    const data = await resp.json();
-    const events = (data.items || []).map(ev => ({
-      id: `${id}:${ev.id}`,
-      summary: ev.summary || "(no title)",
-      start: ev.start?.dateTime || ev.start?.date || null,
-      end: ev.end?.dateTime || ev.end?.date || null,
-      location: ev.location || null,
-      hangoutLink: ev.hangoutLink || null
-    }));
-    all.push(...events);
+    
+    let nextPageToken = null;
+    let totalEventsFromThisCalendar = 0;
+    
+    do {
+      const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events`);
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("orderBy", "startTime");
+      url.searchParams.set("timeMin", timeMinIso);
+      url.searchParams.set("timeMax", timeMaxIso);
+      url.searchParams.set("maxResults", "2500");
+      
+      if (nextPageToken) {
+        url.searchParams.set("pageToken", nextPageToken);
+      }
+      
+      const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Events fetch failed: ${errText}`);
+      }
+      const data = await resp.json();
+      const events = (data.items || []).map(ev => ({
+        id: `${id}:${ev.id}`,
+        summary: ev.summary || "(no title)",
+        start: ev.start?.dateTime || ev.start?.date || null,
+        end: ev.end?.dateTime || ev.end?.date || null,
+        location: ev.location || null,
+        hangoutLink: ev.hangoutLink || null
+      }));
+      all.push(...events);
+      totalEventsFromThisCalendar += events.length;
+      nextPageToken = data.nextPageToken;
+      
+    } while (nextPageToken);
+    
+    console.log(`Fetched ${totalEventsFromThisCalendar} events from calendar ${calendarId} (${id})`);
   }
   // Sort by start time
   return all.sort((a, b) => new Date(a.start) - new Date(b.start));
+}
+
+// Multi-account event fetching
+export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, timeMinIso, timeMaxIso) {
+  if (!accountIds || accountIds.length === 0) {
+    return await fetchEventsForCalendars(clientId, calendarIds, timeMinIso, timeMaxIso);
+  }
+
+  const allEvents = [];
+  
+  // Group calendar IDs by account
+  const calendarsByAccount = {};
+  for (const calendarId of (calendarIds || [])) {
+    // Check if this is already a prefixed calendar ID
+    if (calendarId.includes(':') && calendarId.startsWith('google_')) {
+      const [accountId, originalId] = calendarId.split(':', 2);
+      if (!calendarsByAccount[accountId]) {
+        calendarsByAccount[accountId] = [];
+      }
+      calendarsByAccount[accountId].push(originalId);
+    } else {
+      // This is an unprefixed calendar ID, add it to all accounts
+      for (const accountId of accountIds) {
+        if (!calendarsByAccount[accountId]) {
+          calendarsByAccount[accountId] = [];
+        }
+        calendarsByAccount[accountId].push(calendarId);
+      }
+    }
+  }
+  
+  for (const accountId of accountIds) {
+    try {
+      const accessToken = await getValidAccessTokenForAccount(accountId, clientId);
+      if (!accessToken) continue;
+
+      const accountCalendarIds = calendarsByAccount[accountId] || ["primary"];
+      
+      for (const originalId of accountCalendarIds) {
+        // Handle special calendar IDs
+        let calendarId = originalId;
+        if (originalId.includes('@') && originalId.includes('gmail.com')) {
+          // This is likely a primary calendar email, use 'primary' instead
+          calendarId = 'primary';
+        }
+        
+        let nextPageToken = null;
+        let totalEventsFromThisCalendar = 0;
+        
+        do {
+          const url = new URL(`${CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events`);
+          url.searchParams.set("singleEvents", "true");
+          url.searchParams.set("orderBy", "startTime");
+          url.searchParams.set("timeMin", timeMinIso);
+          url.searchParams.set("timeMax", timeMaxIso);
+          url.searchParams.set("maxResults", "2500");
+          
+          if (nextPageToken) {
+            url.searchParams.set("pageToken", nextPageToken);
+          }
+          
+          const resp = await fetch(url.toString(), { 
+            headers: { Authorization: `Bearer ${accessToken}` } 
+          });
+          
+          if (!resp.ok) {
+            console.warn(`Failed to fetch events for calendar ${calendarId}: ${resp.status} ${resp.statusText}`);
+            break;
+          }
+          
+          const data = await resp.json();
+          const events = (data.items || []).map(ev => ({
+            id: `${accountId}:${originalId}:${ev.id}`,
+            accountId,
+            calendarId: `${accountId}:${originalId}`,
+            summary: ev.summary || "(no title)",
+            start: ev.start?.dateTime || ev.start?.date || null,
+            end: ev.end?.dateTime || ev.end?.date || null,
+            location: ev.location || null,
+            hangoutLink: ev.hangoutLink || null
+          }));
+          
+          allEvents.push(...events);
+          totalEventsFromThisCalendar += events.length;
+          nextPageToken = data.nextPageToken;
+          
+        } while (nextPageToken);
+        
+        console.log(`Fetched ${totalEventsFromThisCalendar} events from calendar ${calendarId} (${originalId})`);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch events for account ${accountId}:`, error);
+    }
+  }
+  
+  // Sort by start time
+  return allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+}
+
+// Helper function to get access token for specific account
+async function getValidAccessTokenForAccount(accountId, clientId) {
+  // Direct implementation to avoid import() in service worker
+  const { accounts = [] } = await chrome.storage.sync.get(["accounts"]);
+  const account = accounts.find(acc => acc.id === accountId);
+  if (!account || account.provider !== "google") return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = (account.authData.obtained_at || 0) + (account.authData.expires_in || 0) - 60;
+  
+  if (account.authData.access_token && now < expiresAt) {
+    return account.authData.access_token;
+  }
+  
+  if (account.authData.refresh_token) {
+    try {
+      const refreshed = await refreshAccessToken(clientId, account.authData.refresh_token);
+      
+      // Update account with new tokens
+      account.authData = { ...account.authData, ...refreshed };
+      const updatedAccounts = accounts.map(acc => 
+        acc.id === accountId ? account : acc
+      );
+      await chrome.storage.sync.set({ accounts: updatedAccounts });
+      
+      return refreshed.access_token;
+    } catch (error) {
+      console.error(`Token refresh failed for account ${accountId}:`, error);
+      return null;
+    }
+  }
+  
+  return null;
 }
 
 export async function signOutGoogle() {

@@ -2,18 +2,51 @@
 import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, signOutGoogle, fetchUserProfile } from "./calendar.js";
 import { CalendarProvider } from "./providers/index.js";
 import { generateAvailability } from "./availability.js";
+import { AccountManager } from "./account-manager.js";
 import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
 
 // Static client ID from config module
 const GOOGLE_CLIENT_ID = CONFIG_CLIENT_ID || null;
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   // Initialize state when the extension is installed or updated
   console.log("Availability extension installed");
   try {
     const redirect = chrome.identity.getRedirectURL();
     console.log("OAuth redirect URI:", redirect);
+    
+    // Migrate existing single account to new multi-account structure
+    if (GOOGLE_CLIENT_ID) {
+      try {
+        await AccountManager.migrateExistingAccount(GOOGLE_CLIENT_ID);
+      } catch (error) {
+        console.log("Migration failed, continuing:", error.message);
+      }
+      
+      // Start background token refresh
+      scheduleTokenRefresh();
+    }
   } catch (_e) {}
 });
+
+// Schedule proactive token refresh every 30 minutes
+function scheduleTokenRefresh() {
+  if (!GOOGLE_CLIENT_ID) return;
+  
+  // Refresh tokens immediately on startup
+  refreshTokensInBackground();
+  
+  // Schedule regular refreshes
+  setInterval(refreshTokensInBackground, 30 * 60 * 1000); // 30 minutes
+}
+
+async function refreshTokensInBackground() {
+  try {
+    const results = await AccountManager.refreshAllTokens(GOOGLE_CLIENT_ID);
+    console.log("Background token refresh completed:", results);
+  } catch (error) {
+    console.error("Background token refresh failed:", error);
+  }
+}
 
 chrome.action.onClicked.addListener(async (tab) => {
   // Reserved in case default_action without popup is used
@@ -84,7 +117,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         end.setDate(end.getDate() + 14);
         const { prefs } = await chrome.storage.sync.get(["prefs"]);
         const selectedCalendars = prefs?.selectedCalendars || null;
-        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString());
+        const activeAccounts = prefs?.activeAccounts || [];
+        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
         const prefsSafe = { mode: (prefs?.mode)||"approachable", context: (prefs?.context)||"work", maxSlots: Number(prefs?.maxSlots)||3 };
         const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });
@@ -98,7 +132,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
-        const list = await CalendarProvider.listCalendars(GOOGLE_CLIENT_ID);
+        const { prefs } = await chrome.storage.sync.get(["prefs"]);
+        const activeAccounts = prefs?.activeAccounts || [];
+        const list = await CalendarProvider.listCalendars(GOOGLE_CLIENT_ID, activeAccounts);
         sendResponse({ ok: true, calendars: list });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
@@ -133,7 +169,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
         const { calendarIds, timeMin, timeMax } = message;
-        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, calendarIds, timeMin, timeMax);
+        const { prefs } = await chrome.storage.sync.get(["prefs"]);
+        const activeAccounts = prefs?.activeAccounts || [];
+        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, calendarIds, timeMin, timeMax, activeAccounts);
         sendResponse({ ok: true, events });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
@@ -152,10 +190,68 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         end.setDate(end.getDate() + 14);
         const { prefs } = await chrome.storage.sync.get(["prefs"]);
         const selectedCalendars = prefs?.selectedCalendars || null;
-        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString());
+        const activeAccounts = prefs?.activeAccounts || [];
+        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
         const options = { mode, context, maxSlots };
         const text = await generateAvailability(events, start, end, options);
         sendResponse({ ok: true, text });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "LIST_ACCOUNTS") {
+    (async () => {
+      try {
+        const accounts = await AccountManager.getAccounts();
+        sendResponse({ ok: true, accounts });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "ADD_GOOGLE_ACCOUNT") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const result = await AccountManager.authenticateGoogle(GOOGLE_CLIENT_ID);
+        sendResponse(result);
+      } catch (e) {
+        sendResponse({ success: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "REMOVE_ACCOUNT") {
+    (async () => {
+      try {
+        const success = await AccountManager.removeAccount(message.accountId);
+        sendResponse({ ok: success });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "TOGGLE_ACCOUNT_ACTIVE") {
+    (async () => {
+      try {
+        await AccountManager.toggleAccountActive(message.accountId, message.active);
+        sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "REFRESH_ACCOUNT_TOKENS") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const results = await AccountManager.refreshAllTokens(GOOGLE_CLIENT_ID);
+        sendResponse({ ok: true, results });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }

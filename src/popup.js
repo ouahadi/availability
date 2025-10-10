@@ -1,5 +1,8 @@
 const statusEl = document.getElementById("status");
 const authButton = document.getElementById("google-auth");
+const accountsSection = document.getElementById("accounts-section");
+const accountsList = document.getElementById("accounts-list");
+const addAccountBtn = document.getElementById("add-account");
 const userProfileEl = document.getElementById("user-profile");
 const profilePictureEl = document.getElementById("profile-picture");
 const profileNameEl = document.getElementById("profile-name");
@@ -18,8 +21,8 @@ const contextSegment = document.getElementById("context-segment");
 // Check if already authenticated on load
 async function checkAuthStatus() {
   try {
-    const res = await chrome.runtime.sendMessage({ type: "CHECK_AUTH_STATUS" });
-    if (res?.authenticated) {
+    const accountsRes = await chrome.runtime.sendMessage({ type: "LIST_ACCOUNTS" });
+    if (accountsRes?.ok && accountsRes.accounts.length > 0) {
       showAuthenticatedState();
       await loadPrefs();
     }
@@ -30,25 +33,68 @@ async function checkAuthStatus() {
 
 async function showAuthenticatedState() {
   authButton.classList.add("hidden");
-  userProfileEl.classList.remove("hidden");
-  connectionStatusEl.classList.remove("hidden");
+  accountsSection.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
   statusEl.textContent = "";
   
-  // Fetch and display user profile
-  try {
-    const res = await chrome.runtime.sendMessage({ type: "GET_USER_PROFILE" });
-    if (res?.ok && res.profile) {
-      profilePictureEl.src = res.profile.picture || "";
-      profileNameEl.textContent = res.profile.name || "User";
-      profileEmailEl.textContent = res.profile.email || "";
-    }
-  } catch (e) {
-    console.error("Failed to fetch user profile:", e);
-  }
+  // Load and display accounts
+  await renderAccounts();
   
   // Automatically generate and copy availability
   await autoGenerateAvailability();
+}
+
+async function renderAccounts() {
+  try {
+    const accountsRes = await chrome.runtime.sendMessage({ type: "LIST_ACCOUNTS" });
+    if (!accountsRes?.ok) {
+      accountsList.innerHTML = '<div style="color: #ff6b9d; text-align: center; padding: 8px;">Failed to load accounts</div>';
+      return;
+    }
+
+    const { prefs } = await chrome.storage.sync.get(["prefs"]);
+    const activeAccounts = new Set((prefs?.activeAccounts) || []);
+    
+    accountsList.innerHTML = "";
+    
+    for (const account of accountsRes.accounts) {
+      const accountItem = document.createElement("div");
+      accountItem.className = "account-item";
+      
+      const left = document.createElement("div");
+      left.className = "left";
+      
+      const accountText = document.createElement("span");
+      accountText.textContent = account.email;
+      accountText.style.fontSize = "13px";
+      accountText.style.fontWeight = activeAccounts.has(account.id) ? "600" : "400";
+      
+      const right = document.createElement("div");
+      
+      // Simple active toggle
+      const toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.checked = activeAccounts.has(account.id);
+      toggle.style.margin = "0";
+      toggle.addEventListener("change", async () => {
+        await chrome.runtime.sendMessage({ 
+          type: "TOGGLE_ACCOUNT_ACTIVE", 
+          accountId: account.id,
+          active: toggle.checked
+        });
+        await renderAccounts();
+      });
+      
+      left.appendChild(accountText);
+      right.appendChild(toggle);
+      
+      accountItem.appendChild(left);
+      accountItem.appendChild(right);
+      accountsList.appendChild(accountItem);
+    }
+  } catch (e) {
+    accountsList.innerHTML = '<div style="color: #ff6b9d; text-align: center; padding: 8px;">Error loading accounts</div>';
+  }
 }
 
 function showUnauthenticatedState() {
@@ -94,6 +140,32 @@ authButton.addEventListener("click", async () => {
     }
   } catch (e) {
     statusEl.textContent = `Connection error: ${e?.message || e}`;
+  }
+});
+
+// Add account button
+addAccountBtn.addEventListener("click", async () => {
+  addAccountBtn.textContent = "Adding...";
+  addAccountBtn.disabled = true;
+  
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "ADD_GOOGLE_ACCOUNT" });
+    if (res?.success) {
+      await renderAccounts();
+      addAccountBtn.textContent = "Added ✓";
+      setTimeout(() => {
+        addAccountBtn.textContent = "+ Add Account";
+        addAccountBtn.disabled = false;
+      }, 2000);
+    } else {
+      addAccountBtn.textContent = "+ Add Account";
+      addAccountBtn.disabled = false;
+      statusEl.textContent = `Failed to add account: ${res?.error || "Unknown error"}`;
+    }
+  } catch (e) {
+    addAccountBtn.textContent = "+ Add Account";
+    addAccountBtn.disabled = false;
+    statusEl.textContent = `Error: ${e?.message || e}`;
   }
 });
 
