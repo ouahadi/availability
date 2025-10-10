@@ -4,6 +4,7 @@ const userProfileEl = document.getElementById("user-profile");
 const profilePictureEl = document.getElementById("profile-picture");
 const profileNameEl = document.getElementById("profile-name");
 const profileEmailEl = document.getElementById("profile-email");
+const connectionStatusEl = document.getElementById("connection-status");
 const availabilitySection = document.getElementById("availability-section");
 const availabilityEl = document.getElementById("availability");
 const toastEl = document.getElementById("toast");
@@ -30,8 +31,9 @@ async function checkAuthStatus() {
 async function showAuthenticatedState() {
   authButton.classList.add("hidden");
   userProfileEl.classList.remove("hidden");
+  connectionStatusEl.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
-  statusEl.textContent = "Connected to Google Calendar";
+  statusEl.textContent = "";
   
   // Fetch and display user profile
   try {
@@ -49,6 +51,7 @@ async function showAuthenticatedState() {
 function showUnauthenticatedState() {
   authButton.classList.remove("hidden");
   userProfileEl.classList.add("hidden");
+  connectionStatusEl.classList.add("hidden");
   availabilitySection.classList.add("hidden");
   statusEl.textContent = "";
 }
