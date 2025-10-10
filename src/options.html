@@ -28,6 +28,20 @@
     <div class="section">
       <button id="sign-out" class="button secondary" style="width:auto; padding:8px 12px;">Sign out</button>
     </div>
+    
+    <!-- Debug Section -->
+    <div class="section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #eee;">
+      <h2 style="margin-bottom: 16px; color: #333;">Debug Information</h2>
+      
+      <div style="margin-bottom: 16px;">
+        <button id="debug-events" style="padding:8px 12px; margin-right:8px; background:#007bff; color:white; border:none; border-radius:4px;">Show Calendar Events</button>
+        <button id="debug-availability" style="padding:8px 12px; margin-right:8px; background:#28a745; color:white; border:none; border-radius:4px;">Show Availability Slots</button>
+        <button id="debug-clear" style="padding:8px 12px; background:#dc3545; color:white; border:none; border-radius:4px;">Clear Debug</button>
+      </div>
+      
+      <div id="debug-output" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:16px; min-height:200px; font-family:monospace; font-size:12px; white-space:pre-wrap; overflow-y:auto; max-height:400px; display:none;"></div>
+    </div>
+    
     <button id="save">Save</button>
     <span id="saved" style="margin-left:8px;"></span>
     <script src="./options.js" type="module"></script>

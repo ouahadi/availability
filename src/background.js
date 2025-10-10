@@ -128,6 +128,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
+  if (message && message.type === "DEBUG_EVENTS") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const { calendarIds, timeMin, timeMax } = message;
+        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, calendarIds, timeMin, timeMax);
+        sendResponse({ ok: true, events });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "DEBUG_AVAILABILITY") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const { mode, context, maxSlots } = message;
+        const now = new Date();
+        const start = new Date(now);
+        const end = new Date(now);
+        end.setDate(end.getDate() + 14);
+        const { prefs } = await chrome.storage.sync.get(["prefs"]);
+        const selectedCalendars = prefs?.selectedCalendars || null;
+        const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString());
+        const options = { mode, context, maxSlots };
+        const text = await generateAvailability(events, start, end, options);
+        sendResponse({ ok: true, text });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
 });
 
 
