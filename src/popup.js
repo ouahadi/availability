@@ -46,6 +46,9 @@ async function showAuthenticatedState() {
   } catch (e) {
     console.error("Failed to fetch user profile:", e);
   }
+  
+  // Automatically generate and copy availability
+  await autoGenerateAvailability();
 }
 
 function showUnauthenticatedState() {
@@ -95,6 +98,32 @@ authButton.addEventListener("click", async () => {
 });
 
 
+// Auto-generate availability function
+async function autoGenerateAvailability() {
+  statusEl.textContent = "Generating availability...";
+  availabilityEl.value = "";
+  
+  try {
+    await savePrefs();
+    const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
+    if (!res?.ok) {
+      statusEl.textContent = `Generation failed: ${res?.error || ""}`;
+      return;
+    }
+    availabilityEl.value = res.text;
+    statusEl.textContent = "Auto-generated & copied to clipboard";
+    
+    // Auto-copy to clipboard
+    availabilityEl.focus();
+    availabilityEl.select();
+    document.execCommand("copy");
+    toastEl.classList.add("show");
+    setTimeout(() => toastEl.classList.remove("show"), 2000);
+  } catch (e) {
+    statusEl.textContent = `Generation error: ${e?.message || e}`;
+  }
+}
+
 // Generate availability button
 const copyBtn = document.getElementById("gen-availability");
 copyBtn.addEventListener("click", async () => {
@@ -121,9 +150,12 @@ copyBtn.addEventListener("click", async () => {
   copyBtn.disabled = false;
 });
 
-// Persist changes when toggles are changed
+// Persist changes and regenerate availability when toggles are changed
 for (const el of [modeApproachable, modeBusy, ctxPersonal, ctxWork]) {
-  el.addEventListener("change", savePrefs);
+  el.addEventListener("change", async () => {
+    await savePrefs();
+    await autoGenerateAvailability();
+  });
 }
 
 // Custom switch and segmented control wiring
@@ -133,6 +165,7 @@ modeSwitch.addEventListener("click", async () => {
   modeBusy.checked = isBusy;
   modeApproachable.checked = !isBusy;
   await savePrefs();
+  await autoGenerateAvailability();
 });
 
 contextSegment.addEventListener("click", async (e) => {
@@ -144,6 +177,7 @@ contextSegment.addEventListener("click", async (e) => {
   ctxPersonal.checked = val === "personal";
   ctxWork.checked = val !== "personal";
   await savePrefs();
+  await autoGenerateAvailability();
 });
 
 
