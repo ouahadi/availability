@@ -1,6 +1,9 @@
 const statusEl = document.getElementById("status");
 const authButton = document.getElementById("google-auth");
-const signOutButton = document.getElementById("google-signout");
+const userProfileEl = document.getElementById("user-profile");
+const profilePictureEl = document.getElementById("profile-picture");
+const profileNameEl = document.getElementById("profile-name");
+const profileEmailEl = document.getElementById("profile-email");
 const availabilitySection = document.getElementById("availability-section");
 const availabilityEl = document.getElementById("availability");
 const toastEl = document.getElementById("toast");
@@ -24,16 +27,28 @@ async function checkAuthStatus() {
   }
 }
 
-function showAuthenticatedState() {
+async function showAuthenticatedState() {
   authButton.classList.add("hidden");
-  signOutButton.classList.remove("hidden");
+  userProfileEl.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
   statusEl.textContent = "Connected to Google Calendar";
+  
+  // Fetch and display user profile
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "GET_USER_PROFILE" });
+    if (res?.ok && res.profile) {
+      profilePictureEl.src = res.profile.picture || "";
+      profileNameEl.textContent = res.profile.name || "User";
+      profileEmailEl.textContent = res.profile.email || "";
+    }
+  } catch (e) {
+    console.error("Failed to fetch user profile:", e);
+  }
 }
 
 function showUnauthenticatedState() {
   authButton.classList.remove("hidden");
-  signOutButton.classList.add("hidden");
+  userProfileEl.classList.add("hidden");
   availabilitySection.classList.add("hidden");
   statusEl.textContent = "";
 }
@@ -76,21 +91,6 @@ authButton.addEventListener("click", async () => {
   }
 });
 
-// Sign out button
-signOutButton.addEventListener("click", async () => {
-  statusEl.textContent = "Signing out...";
-  try {
-    const res = await chrome.runtime.sendMessage({ type: "GOOGLE_SIGN_OUT" });
-    if (res?.ok) {
-      showUnauthenticatedState();
-      availabilityEl.value = "";
-    } else {
-      statusEl.textContent = `Sign out failed: ${res?.error || ""}`;
-    }
-  } catch (e) {
-    statusEl.textContent = `Sign out error: ${e?.message || e}`;
-  }
-});
 
 // Generate availability button
 const copyBtn = document.getElementById("gen-availability");

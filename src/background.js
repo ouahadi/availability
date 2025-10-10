@@ -1,5 +1,5 @@
 // Background service worker (MV3)
-import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, signOutGoogle } from "./calendar.js";
+import { startGoogleAuth, fetchUpcomingEvents, fetchEventsInRange, signOutGoogle, fetchUserProfile } from "./calendar.js";
 import { CalendarProvider } from "./providers/index.js";
 import { generateAvailability } from "./availability.js";
 import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
@@ -111,6 +111,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         await signOutGoogle();
         sendResponse({ ok: true });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "GET_USER_PROFILE") {
+    (async () => {
+      try {
+        const profile = await fetchUserProfile();
+        sendResponse({ ok: true, profile });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }
