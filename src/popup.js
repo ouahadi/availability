@@ -1,3 +1,5 @@
+import { AccountManager } from "./account-manager.js";
+
 const statusEl = document.getElementById("status");
 const authButton = document.getElementById("google-auth");
 const accountsSection = document.getElementById("accounts-section");
@@ -23,11 +25,22 @@ async function checkAuthStatus() {
   try {
     const accountsRes = await chrome.runtime.sendMessage({ type: "LIST_ACCOUNTS" });
     if (accountsRes?.ok && accountsRes.accounts.length > 0) {
-      showAuthenticatedState();
-      await loadPrefs();
+      // Check if we have any active accounts
+      const activeAccounts = accountsRes.accounts.filter(acc => acc.active);
+      if (activeAccounts.length > 0) {
+        showAuthenticatedState();
+        await loadPrefs();
+      } else {
+        // All accounts are inactive, show unauthenticated state
+        showUnauthenticatedState();
+      }
+    } else {
+      showUnauthenticatedState();
     }
   } catch (e) {
-    // Ignore errors on startup
+    console.warn("Failed to check auth status:", e);
+    // On error, show unauthenticated state to be safe
+    showUnauthenticatedState();
   }
 }
 
@@ -52,9 +65,6 @@ async function renderAccounts() {
       return;
     }
 
-    const { prefs } = await chrome.storage.sync.get(["prefs"]);
-    const activeAccounts = new Set((prefs?.activeAccounts) || []);
-    
     accountsList.innerHTML = "";
     
     for (const account of accountsRes.accounts) {
@@ -67,26 +77,91 @@ async function renderAccounts() {
       const accountText = document.createElement("span");
       accountText.textContent = account.email;
       accountText.style.fontSize = "13px";
-      accountText.style.fontWeight = activeAccounts.has(account.id) ? "600" : "400";
+      accountText.style.fontWeight = account.active ? "600" : "400";
+      accountText.style.opacity = account.active ? "1" : "0.6";
       
       const right = document.createElement("div");
+      right.style.display = "flex";
+      right.style.alignItems = "center";
+      right.style.gap = "8px";
       
-      // Simple active toggle
-      const toggle = document.createElement("input");
-      toggle.type = "checkbox";
-      toggle.checked = activeAccounts.has(account.id);
-      toggle.style.margin = "0";
-      toggle.addEventListener("change", async () => {
-        await chrome.runtime.sendMessage({ 
-          type: "TOGGLE_ACCOUNT_ACTIVE", 
-          accountId: account.id,
-          active: toggle.checked
-        });
-        await renderAccounts();
-      });
+      // Status dot
+      const statusDot = document.createElement("div");
+      statusDot.style.width = "8px";
+      statusDot.style.height = "8px";
+      statusDot.style.borderRadius = "50%";
+      
+      if (account.active) {
+        // Check if account needs reauth by trying to get a token
+        try {
+          const tokenRes = await chrome.runtime.sendMessage({ 
+            type: "CHECK_ACCOUNT_STATUS", 
+            accountId: account.id 
+          });
+          
+          if (tokenRes?.ok) {
+            if (tokenRes.status === 'needs_reauth') {
+              statusDot.style.background = "#f59e0b"; // Amber
+              statusDot.title = "Needs reconnection";
+              
+              // Add retry icon
+              const retryIcon = document.createElement("span");
+              retryIcon.textContent = "↻";
+              retryIcon.style.cursor = "pointer";
+              retryIcon.style.fontSize = "12px";
+              retryIcon.style.color = "#f59e0b";
+              retryIcon.title = "Click to reconnect";
+              retryIcon.addEventListener("click", async () => {
+                await reconnectAccount(account.id);
+              });
+              right.appendChild(retryIcon);
+            } else if (tokenRes.status === 'active') {
+              statusDot.style.background = "#10b981"; // Green
+              statusDot.title = "Connected";
+            } else {
+              statusDot.style.background = "#ef4444"; // Red
+              statusDot.title = "Connection error";
+            }
+          } else {
+            // If status check failed, assume it needs reauth
+            statusDot.style.background = "#f59e0b"; // Amber
+            statusDot.title = "Status unknown - needs reconnection";
+            
+            const retryIcon = document.createElement("span");
+            retryIcon.textContent = "↻";
+            retryIcon.style.cursor = "pointer";
+            retryIcon.style.fontSize = "12px";
+            retryIcon.style.color = "#f59e0b";
+            retryIcon.title = "Click to reconnect";
+            retryIcon.addEventListener("click", async () => {
+              await reconnectAccount(account.id);
+            });
+            right.appendChild(retryIcon);
+          }
+        } catch (error) {
+          console.warn(`Failed to check status for account ${account.email}:`, error);
+          // Don't fail the entire rendering - just mark this account as needing attention
+          statusDot.style.background = "#f59e0b"; // Amber
+          statusDot.title = "Status check failed - needs reconnection";
+          
+          const retryIcon = document.createElement("span");
+          retryIcon.textContent = "↻";
+          retryIcon.style.cursor = "pointer";
+          retryIcon.style.fontSize = "12px";
+          retryIcon.style.color = "#f59e0b";
+          retryIcon.title = "Click to reconnect";
+          retryIcon.addEventListener("click", async () => {
+            await reconnectAccount(account.id);
+          });
+          right.appendChild(retryIcon);
+        }
+      } else {
+        statusDot.style.background = "#6b7280"; // Gray
+        statusDot.title = "Inactive";
+      }
       
       left.appendChild(accountText);
-      right.appendChild(toggle);
+      right.appendChild(statusDot);
       
       accountItem.appendChild(left);
       accountItem.appendChild(right);
@@ -94,6 +169,23 @@ async function renderAccounts() {
     }
   } catch (e) {
     accountsList.innerHTML = '<div style="color: #ff6b9d; text-align: center; padding: 8px;">Error loading accounts</div>';
+  }
+}
+
+async function reconnectAccount(accountId) {
+  try {
+    const res = await chrome.runtime.sendMessage({ 
+      type: "RECONNECT_ACCOUNT", 
+      accountId: accountId 
+    });
+    
+    if (res?.success) {
+      await renderAccounts(); // Refresh the account list
+    } else {
+      statusEl.textContent = AccountManager.getUserFriendlyError(res?.error || "Reconnection failed");
+    }
+  } catch (error) {
+    statusEl.textContent = AccountManager.getUserFriendlyError(error.message);
   }
 }
 
@@ -137,10 +229,10 @@ authButton.addEventListener("click", async () => {
       showAuthenticatedState();
       await loadPrefs();
     } else {
-      statusEl.textContent = `Connection failed: ${res?.error || "Unknown error"}`;
+      statusEl.textContent = AccountManager.getUserFriendlyError(res?.error || "Connection failed");
     }
   } catch (e) {
-    statusEl.textContent = `Connection error: ${e?.message || e}`;
+    statusEl.textContent = AccountManager.getUserFriendlyError(e?.message || e);
   }
 });
 
@@ -161,12 +253,12 @@ addAccountBtn.addEventListener("click", async () => {
     } else {
       addAccountBtn.textContent = "+ Add Account";
       addAccountBtn.disabled = false;
-      statusEl.textContent = `Failed to add account: ${res?.error || "Unknown error"}`;
+      statusEl.textContent = AccountManager.getUserFriendlyError(res?.error || "Failed to add account");
     }
   } catch (e) {
     addAccountBtn.textContent = "+ Add Account";
     addAccountBtn.disabled = false;
-    statusEl.textContent = `Error: ${e?.message || e}`;
+    statusEl.textContent = AccountManager.getUserFriendlyError(e?.message || e);
   }
 });
 
@@ -180,7 +272,8 @@ async function autoGenerateAvailability() {
     await savePrefs();
     const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
     if (!res?.ok) {
-      statusEl.textContent = `Generation failed: ${res?.error || ""}`;
+      const friendlyError = AccountManager.getUserFriendlyError(res?.error || "Generation failed");
+      statusEl.textContent = `Generation failed: ${friendlyError}`;
       return;
     }
     availabilityEl.value = res.text;
@@ -207,7 +300,8 @@ copyBtn.addEventListener("click", async () => {
     await savePrefs();
     const res = await chrome.runtime.sendMessage({ type: "GENERATE_AVAILABILITY" });
     if (!res?.ok) {
-      statusEl.textContent = `Generation failed: ${res?.error || ""}`;
+      const friendlyError = AccountManager.getUserFriendlyError(res?.error || "Generation failed");
+      statusEl.textContent = `Generation failed: ${friendlyError}`;
       return;
     }
     availabilityEl.value = res.text;

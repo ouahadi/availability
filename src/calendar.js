@@ -8,6 +8,17 @@ const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars";
 const CALENDAR_LIST_ENDPOINT = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+
+// Helper function to get account email from account ID for logging
+async function getAccountEmail(accountId) {
+  try {
+    const { accounts } = await chrome.storage.sync.get(["accounts"]);
+    const account = (accounts || []).find(acc => acc.id === accountId);
+    return account ? account.email : accountId;
+  } catch (error) {
+    return accountId; // Fallback to account ID if we can't get email
+  }
+}
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.readonly",
   "openid",
@@ -317,7 +328,7 @@ export async function fetchEventsForCalendars(clientId, calendarIds, timeMinIso,
       
     } while (nextPageToken);
     
-    console.log(`Fetched ${totalEventsFromThisCalendar} events from calendar ${calendarId} (${id})`);
+    console.log(`📅 Fetched ${totalEventsFromThisCalendar} events from calendar "${id}" (${calendarId})`);
   }
   // Sort by start time
   return all.sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -409,10 +420,12 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
           
         } while (nextPageToken);
         
-        console.log(`Fetched ${totalEventsFromThisCalendar} events from calendar ${calendarId} (${originalId})`);
+        const accountEmail = await getAccountEmail(accountId);
+        console.log(`📅 Fetched ${totalEventsFromThisCalendar} events from calendar "${originalId}" (${calendarId}) for account ${accountEmail}`);
       }
     } catch (error) {
-      console.error(`Failed to fetch events for account ${accountId}:`, error);
+      const accountEmail = await getAccountEmail(accountId);
+      console.error(`❌ Failed to fetch events for account ${accountEmail}:`, error);
     }
   }
   

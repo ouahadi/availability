@@ -10,6 +10,49 @@ export class AccountManager {
   
   // Authentication lock to prevent concurrent auth flows
   static authLock = null;
+  
+  // Convert technical errors to user-friendly messages
+  static getUserFriendlyError(errorMessage) {
+    const friendlyErrors = {
+      "Authentication already in progress": "Please wait, another account is being added...",
+      "No access token received from Google": "Google authentication failed. Please try again.",
+      "Invalid user profile received from Google": "Couldn't get your account info from Google. Please try again.",
+      "Failed to fetch user profile": "Couldn't connect to Google. Please check your internet connection and try again.",
+      "Token refresh failed": "Your account needs to be reconnected. Click the retry icon.",
+      "Request is missing required authentication credential": "Your account connection has expired. Please reconnect.",
+      "401": "Your account needs to be reconnected. Click the retry icon.",
+      "UNAUTHENTICATED": "Your account needs to be reconnected. Click the retry icon."
+    };
+    
+    // Check for partial matches
+    for (const [technical, friendly] of Object.entries(friendlyErrors)) {
+      if (errorMessage.includes(technical)) {
+        return friendly;
+      }
+    }
+    
+    // Default fallback
+    return "Something went wrong. Please try again.";
+  }
+  
+  // Check account health status
+  static async getAccountStatus(accountId, clientId) {
+    const account = await this.getAccount(accountId);
+    if (!account || !account.active) {
+      return { status: 'inactive', needsReauth: false };
+    }
+    
+    try {
+      const token = await this.getValidTokenForAccount(accountId, clientId);
+      if (token) {
+        return { status: 'active', needsReauth: false };
+      } else {
+        return { status: 'needs_reauth', needsReauth: true };
+      }
+    } catch (error) {
+      return { status: 'error', needsReauth: true };
+    }
+  }
 
   // Get all stored accounts
   static async getAccounts() {

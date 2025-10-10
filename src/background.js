@@ -43,9 +43,20 @@ async function refreshTokensInBackground() {
   try {
     console.log("Starting background token refresh...");
     const results = await AccountManager.refreshAllTokens(GOOGLE_CLIENT_ID);
-    console.log("Background token refresh completed:", results);
+    
+    // Log summary without failing if some accounts had issues
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    
+    if (failed > 0) {
+      console.warn(`Background token refresh: ${successful} successful, ${failed} failed`);
+      // Don't throw error - just log the failures
+    } else {
+      console.log("Background token refresh completed successfully");
+    }
   } catch (error) {
-    console.error("Background token refresh failed:", error);
+    console.error("Background token refresh failed completely:", error);
+    // Don't propagate the error - let the extension continue working
   }
 }
 
@@ -123,6 +134,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { prefs } = await chrome.storage.sync.get(["prefs"]);
         const selectedCalendars = prefs?.selectedCalendars || null;
         const activeAccounts = prefs?.activeAccounts || [];
+        
+        console.log(`🎯 Generating availability using:`);
+        console.log(`   📅 Selected calendars: ${selectedCalendars ? selectedCalendars.join(", ") : "All (primary only)"}`);
+        
+        // Show email addresses instead of account IDs
+        if (activeAccounts.length > 0) {
+          const { accounts } = await chrome.storage.sync.get(["accounts"]);
+          const accountEmails = activeAccounts.map(accountId => {
+            const account = (accounts || []).find(acc => acc.id === accountId);
+            return account ? account.email : accountId;
+          });
+          console.log(`   👥 Active accounts: ${accountEmails.join(", ")}`);
+        } else {
+          console.log(`   👥 Active accounts: None`);
+        }
+        
         const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
         const prefsSafe = { mode: (prefs?.mode)||"approachable", context: (prefs?.context)||"work", maxSlots: Number(prefs?.maxSlots)||3 };
         const text = await generateAvailability(events, start, end, prefsSafe);
@@ -259,6 +286,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true, results });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "CHECK_ACCOUNT_STATUS") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const status = await AccountManager.getAccountStatus(message.accountId, GOOGLE_CLIENT_ID);
+        sendResponse({ ok: true, ...status });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e?.message || e) });
+      }
+    })();
+    return true;
+  }
+  if (message && message.type === "RECONNECT_ACCOUNT") {
+    (async () => {
+      try {
+        if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
+        const result = await AccountManager.authenticateGoogle(GOOGLE_CLIENT_ID);
+        if (result.success) {
+          sendResponse({ success: true, account: result.account });
+        } else {
+          sendResponse({ success: false, error: AccountManager.getUserFriendlyError(result.error) });
+        }
+      } catch (e) {
+        sendResponse({ success: false, error: AccountManager.getUserFriendlyError(String(e?.message || e)) });
       }
     })();
     return true;

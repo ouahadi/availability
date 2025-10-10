@@ -12,6 +12,17 @@ const debugAvailabilityBtn = document.getElementById("debug-availability");
 const debugClearBtn = document.getElementById("debug-clear");
 const debugOutputEl = document.getElementById("debug-output");
 
+// Helper function to get account email from account ID for logging
+async function getAccountEmail(accountId) {
+  try {
+    const { accounts } = await chrome.storage.sync.get(["accounts"]);
+    const account = (accounts || []).find(acc => acc.id === accountId);
+    return account ? account.email : accountId;
+  } catch (error) {
+    return accountId; // Fallback to account ID if we can't get email
+  }
+}
+
 async function load() {
   const { prefs } = await chrome.storage.sync.get(["prefs"]);
   const maxSlots = Number(prefs?.maxSlots) || 3;
@@ -281,14 +292,24 @@ async function debugCalendarEvents() {
     if (events.length === 0) {
       output += "No events found in the specified range.\n";
     } else {
-      events.forEach((event, index) => {
+      for (const [index, event] of events.entries()) {
         output += `${index + 1}. ${event.summary}\n`;
-        output += `   Start: ${event.start}\n`;
-        output += `   End: ${event.end}\n`;
-        if (event.location) output += `   Location: ${event.location}\n`;
-        if (event.hangoutLink) output += `   Hangout: ${event.hangoutLink}\n`;
-        output += `   Online: ${!event.location || event.hangoutLink || event.location.toLowerCase().includes("online") || event.location.toLowerCase().includes("zoom") || event.location.toLowerCase().includes("meet") || event.location.toLowerCase().includes("teams") ? "Yes" : "No"}\n\n`;
-      });
+        
+        // Show email instead of account ID
+        if (event.accountId && event.calendarId) {
+          const accountEmail = await getAccountEmail(event.accountId);
+          const calendarName = event.calendarId.includes(':') ? event.calendarId.split(':').slice(1).join(':') : event.calendarId;
+          output += `   📅 Source: Account ${accountEmail}, Calendar ${calendarName}\n`;
+        } else {
+          output += `   📅 Source: Account ${event.accountId || 'N/A'}, Calendar ${event.calendarId || 'N/A'}\n`;
+        }
+        
+        output += `   🕐 Start: ${event.start}\n`;
+        output += `   🕐 End: ${event.end}\n`;
+        if (event.location) output += `   📍 Location: ${event.location}\n`;
+        if (event.hangoutLink) output += `   💻 Hangout: ${event.hangoutLink}\n`;
+        output += `   🌐 Online: ${!event.location || event.hangoutLink || event.location.toLowerCase().includes("online") || event.location.toLowerCase().includes("zoom") || event.location.toLowerCase().includes("meet") || event.location.toLowerCase().includes("teams") ? "Yes" : "No"}\n\n`;
+      }
     }
     
     showDebugOutput(output);

@@ -6,6 +6,17 @@
 
 const UK_BANK_HOLIDAYS_URL = "https://www.gov.uk/bank-holidays.json";
 
+// Helper function to get account email from account ID for logging
+async function getAccountEmail(accountId) {
+  try {
+    const { accounts } = await chrome.storage.sync.get(["accounts"]);
+    const account = (accounts || []).find(acc => acc.id === accountId);
+    return account ? account.email : accountId;
+  } catch (error) {
+    return accountId; // Fallback to account ID if we can't get email
+  }
+}
+
 function toLocalDate(date) {
   return new Date(date);
 }
@@ -135,6 +146,23 @@ function splitIntoHourSlots(freeIntervals) {
 
 export async function generateAvailability(events, startDate, endDate, options = {}) {
   const { context = "work", mode = "approachable", maxSlots = 3 } = options;
+  
+  // Log event sources summary
+  console.log(`🚀 Generating availability with ${events.length} events from ${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`);
+  const sourceSummary = {};
+  for (const ev of events) {
+    if (ev.accountId && ev.calendarId) {
+      const accountEmail = await getAccountEmail(ev.accountId);
+      // Extract calendar name from prefixed calendar ID (e.g., "google_123:primary" -> "primary")
+      const calendarName = ev.calendarId.includes(':') ? ev.calendarId.split(':').slice(1).join(':') : ev.calendarId;
+      const source = `${accountEmail}:${calendarName}`;
+      sourceSummary[source] = (sourceSummary[source] || 0) + 1;
+    } else {
+      sourceSummary['Unknown'] = (sourceSummary['Unknown'] || 0) + 1;
+    }
+  }
+  console.log(`📊 Events by source:`, sourceSummary);
+  
   const holidays = await fetchUkHolidaysSet();
   const now = new Date();
   const out = [];
@@ -167,6 +195,22 @@ export async function generateAvailability(events, startDate, endDate, options =
       const s = toLocalDate(ev.start);
       return isSameDay(s, d);
     });
+    
+    // Log events being processed for this day
+    if (dayEvents.length > 0) {
+      const dayStr = d.toISOString().slice(0, 10);
+      console.log(`📋 Processing ${dayEvents.length} events for ${dayStr}:`);
+      for (const [idx, ev] of dayEvents.entries()) {
+        if (ev.accountId && ev.calendarId) {
+          const accountEmail = await getAccountEmail(ev.accountId);
+          const calendarName = ev.calendarId.includes(':') ? ev.calendarId.split(':').slice(1).join(':') : ev.calendarId;
+          console.log(`   ${idx + 1}. "${ev.summary}" (${ev.start}) - Account ${accountEmail}, Calendar ${calendarName}`);
+        } else {
+          console.log(`   ${idx + 1}. "${ev.summary}" (${ev.start}) - Unknown source`);
+        }
+      }
+    }
+    
     const busy = [];
     for (const ev of dayEvents) {
       if (!ev.start || !ev.end) continue;
