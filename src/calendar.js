@@ -9,7 +9,10 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_EVENTS_ENDPOINT = "https://www.googleapis.com/calendar/v3/calendars";
 const CALENDAR_LIST_ENDPOINT = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 const SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly"
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile"
 ];
 
 async function sha256(buffer) {
@@ -49,7 +52,7 @@ async function setStoredAuth(auth) {
   await chrome.storage.sync.set({ googleAuth: auth });
 }
 
-async function clearStoredAuth() {
+export async function clearStoredAuth() {
   await chrome.storage.sync.remove(["googleAuth"]);
 }
 
@@ -100,11 +103,13 @@ export async function startGoogleAuth(clientId) {
   }
   const tokens = await tokenResp.json();
   const now = Math.floor(Date.now() / 1000);
-  await setStoredAuth({
+  
+  // Don't store tokens here - AccountManager will handle storage
+  // Just return the tokens with timestamp for the caller to handle
+  return {
     ...tokens,
     obtained_at: now
-  });
-  return tokens;
+  };
 }
 
 export async function getValidAccessToken(clientId) {
@@ -454,23 +459,32 @@ export async function signOutGoogle() {
   await clearStoredAuth();
 }
 
-export async function fetchUserProfile() {
-  const accessToken = await getValidAccessToken();
-  if (!accessToken) {
+export async function fetchUserProfile(accessToken = null) {
+  // Use provided token or get a valid one from storage
+  const token = accessToken || await getValidAccessToken();
+  if (!token) {
     throw new Error("No valid access token available");
   }
 
+  console.log("Fetching user profile with token:", token.substring(0, 20) + "...");
+  
   const response = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
     headers: {
-      Authorization: `Bearer ${accessToken}`
+      Authorization: `Bearer ${token}`
     }
   });
 
+  console.log("User profile API response:", response.status, response.statusText);
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch user profile: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error("User profile API error response:", errorText);
+    throw new Error(`Failed to fetch user profile: ${response.status} ${response.statusText}`);
   }
 
-  return await response.json();
+  const profile = await response.json();
+  console.log("User profile received:", profile.email);
+  return profile;
 }
 
 

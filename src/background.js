@@ -41,6 +41,7 @@ function scheduleTokenRefresh() {
 
 async function refreshTokensInBackground() {
   try {
+    console.log("Starting background token refresh...");
     const results = await AccountManager.refreshAllTokens(GOOGLE_CLIENT_ID);
     console.log("Background token refresh completed:", results);
   } catch (error) {
@@ -87,8 +88,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         if (!GOOGLE_CLIENT_ID) throw new Error("Missing GOOGLE_CLIENT_ID in src/config.js");
-        await startGoogleAuth(GOOGLE_CLIENT_ID);
-        sendResponse({ ok: true });
+        const result = await AccountManager.authenticateGoogle(GOOGLE_CLIENT_ID);
+        if (result.success) {
+          sendResponse({ ok: true, account: result.account, isNew: result.isNew });
+        } else {
+          sendResponse({ ok: false, error: result.error });
+        }
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }

@@ -133,10 +133,11 @@ authButton.addEventListener("click", async () => {
   try {
     const res = await chrome.runtime.sendMessage({ type: "GOOGLE_AUTH" });
     if (res?.ok) {
+      statusEl.textContent = "";
       showAuthenticatedState();
       await loadPrefs();
     } else {
-      statusEl.textContent = `Connection failed: ${res?.error || ""}`;
+      statusEl.textContent = `Connection failed: ${res?.error || "Unknown error"}`;
     }
   } catch (e) {
     statusEl.textContent = `Connection error: ${e?.message || e}`;

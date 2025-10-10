@@ -1,12 +1,15 @@
 // Multi-account management system for Google accounts
 // Handles storage, authentication, and token management for multiple accounts
 
-import { startGoogleAuth, getValidAccessToken, refreshAccessToken, signOutGoogle, fetchUserProfile } from "./calendar.js";
+import { startGoogleAuth, getValidAccessToken, refreshAccessToken, signOutGoogle, fetchUserProfile, clearStoredAuth } from "./calendar.js";
 
 export class AccountManager {
   // Storage key for accounts
   static ACCOUNTS_STORAGE_KEY = "accounts";
   static PREFS_STORAGE_KEY = "prefs";
+  
+  // Authentication lock to prevent concurrent auth flows
+  static authLock = null;
 
   // Get all stored accounts
   static async getAccounts() {
@@ -116,56 +119,133 @@ export class AccountManager {
 
   // Authenticate a new Google account
   static async authenticateGoogle(clientId) {
+    // Check if another auth flow is in progress
+    if (this.authLock) {
+      console.log("Authentication already in progress, waiting...");
+      await this.authLock;
+      return { success: false, error: "Authentication already in progress" };
+    }
+    
+    // Create auth lock
+    this.authLock = this._performAuthentication(clientId);
+    
     try {
-      // Start auth flow
-      const tokens = await startGoogleAuth(clientId);
-      
-      // Get user profile
-      const profile = await fetchUserProfile();
-      
-      // Check if account already exists
-      const existingAccounts = await this.getAccounts();
-      const existingAccount = existingAccounts.find(acc => 
-        acc.provider === "google" && acc.email === profile.email
-      );
-      
-      if (existingAccount) {
-        // Update existing account with new tokens
-        existingAccount.authData = tokens;
-        existingAccount.picture = profile.picture || existingAccount.picture;
-        existingAccount.name = profile.name || existingAccount.name;
+      const result = await this.authLock;
+      return result;
+    } finally {
+      // Clear the lock when done
+      this.authLock = null;
+    }
+  }
+  
+  // Internal method to perform the actual authentication
+  static async _performAuthentication(clientId) {
+    let tokens = null;
+    const maxRetries = 2;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Starting Google authentication flow (attempt ${attempt}/${maxRetries})...`);
         
-        const updatedAccounts = existingAccounts.map(acc => 
-          acc.id === existingAccount.id ? existingAccount : acc
+        // Start auth flow
+        tokens = await startGoogleAuth(clientId);
+        if (!tokens || !tokens.access_token) {
+          throw new Error("No access token received from Google");
+        }
+        
+        console.log("Auth flow completed, fetching user profile...");
+        console.log("Access token received:", tokens.access_token ? "Yes" : "No");
+        console.log("Token length:", tokens.access_token ? tokens.access_token.length : 0);
+        console.log("Token preview:", tokens.access_token ? tokens.access_token.substring(0, 50) + "..." : "None");
+        console.log("Token expires in:", tokens.expires_in ? tokens.expires_in + " seconds" : "Unknown");
+        console.log("Token scopes:", tokens.scope || "Not specified");
+        
+        // Get user profile using the fresh access token
+        const profile = await fetchUserProfile(tokens.access_token);
+        if (!profile || !profile.email) {
+          throw new Error("Invalid user profile received from Google");
+        }
+        
+        console.log(`Fetched profile for: ${profile.email}`);
+        
+        // Check if account already exists
+        const existingAccounts = await this.getAccounts();
+        const existingAccount = existingAccounts.find(acc => 
+          acc.provider === "google" && acc.email === profile.email
         );
-        await chrome.storage.sync.set({ [this.ACCOUNTS_STORAGE_KEY]: updatedAccounts });
         
-        return { success: true, account: existingAccount, isNew: false };
+        if (existingAccount) {
+          console.log(`Updating existing account: ${profile.email}`);
+          // Update existing account with new tokens
+          existingAccount.authData = { ...existingAccount.authData, ...tokens };
+          existingAccount.picture = profile.picture || existingAccount.picture;
+          existingAccount.name = profile.name || existingAccount.name;
+          
+          const updatedAccounts = existingAccounts.map(acc => 
+            acc.id === existingAccount.id ? existingAccount : acc
+          );
+          await chrome.storage.sync.set({ [this.ACCOUNTS_STORAGE_KEY]: updatedAccounts });
+          
+          // Ensure account is active
+          await this.toggleAccountActive(existingAccount.id, true);
+          
+          return { success: true, account: existingAccount, isNew: false };
+        }
+        
+        console.log(`Creating new account: ${profile.email}`);
+        // Add new account
+        const account = await this.addAccount("google", tokens, profile);
+        return { success: true, account, isNew: true };
+        
+      } catch (error) {
+        console.error(`Google authentication failed (attempt ${attempt}/${maxRetries}):`, error);
+        
+        // If this is the last attempt, give up
+        if (attempt === maxRetries) {
+          // Clean up any partial state
+          if (tokens) {
+            try {
+              await clearStoredAuth();
+            } catch (cleanupError) {
+              console.warn("Failed to cleanup auth state:", cleanupError);
+            }
+          }
+          
+          return { 
+            success: false, 
+            error: error.message || "Authentication failed after retries" 
+          };
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, etc.
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      
-      // Add new account
-      const account = await this.addAccount("google", tokens, profile);
-      return { success: true, account, isNew: true };
-      
-    } catch (error) {
-      return { success: false, error: error.message };
     }
   }
 
   // Get valid access token for a specific account
   static async getValidTokenForAccount(accountId, clientId) {
     const account = await this.getAccount(accountId);
-    if (!account || account.provider !== "google") return null;
+    if (!account || account.provider !== "google") {
+      console.warn(`Account ${accountId} not found or not a Google account`);
+      return null;
+    }
 
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = (account.authData.obtained_at || 0) + (account.authData.expires_in || 0) - 60;
     
+    // Check if current token is still valid
     if (account.authData.access_token && now < expiresAt) {
+      console.log(`Using valid token for account ${account.email}`);
       return account.authData.access_token;
     }
     
+    // Try to refresh the token
     if (account.authData.refresh_token) {
       try {
+        console.log(`Refreshing token for account ${account.email}`);
         const refreshed = await refreshAccessToken(clientId, account.authData.refresh_token);
         
         // Update account with new tokens
@@ -176,13 +256,17 @@ export class AccountManager {
         );
         await chrome.storage.sync.set({ [this.ACCOUNTS_STORAGE_KEY]: updatedAccounts });
         
+        console.log(`Successfully refreshed token for account ${account.email}`);
         return refreshed.access_token;
       } catch (error) {
-        console.error(`Token refresh failed for account ${accountId}:`, error);
+        console.error(`Token refresh failed for account ${account.email}:`, error);
+        // Mark account as inactive if refresh fails
+        await this.toggleAccountActive(accountId, false);
         return null;
       }
     }
     
+    console.warn(`No valid token or refresh token for account ${account.email}`);
     return null;
   }
 
@@ -204,16 +288,32 @@ export class AccountManager {
       if (account.provider === "google") {
         try {
           const token = await this.getValidTokenForAccount(account.id, clientId);
-          return { accountId: account.id, success: !!token };
+          if (token) {
+            console.log(`Successfully refreshed token for ${account.email}`);
+            return { accountId: account.id, success: true, status: "refreshed" };
+          } else {
+            console.warn(`Failed to get valid token for ${account.email}`);
+            // Mark account as inactive if token refresh fails
+            await this.toggleAccountActive(account.id, false);
+            return { accountId: account.id, success: false, status: "marked_inactive" };
+          }
         } catch (error) {
           console.error(`Failed to refresh token for ${account.email}:`, error);
-          return { accountId: account.id, success: false, error: error.message };
+          // Mark account as inactive on persistent failure
+          await this.toggleAccountActive(account.id, false);
+          return { accountId: account.id, success: false, status: "marked_inactive", error: error.message };
         }
       }
-      return { accountId: account.id, success: true };
+      return { accountId: account.id, success: true, status: "skipped" };
     });
 
     const results = await Promise.all(refreshPromises);
+    
+    // Log summary
+    const successful = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    console.log(`Token refresh completed: ${successful} successful, ${failed} failed`);
+    
     return results;
   }
 
@@ -233,7 +333,7 @@ export class AccountManager {
         return null;
       }
       
-      // Get user profile
+      // Get user profile using the stored access token
       const profile = await fetchUserProfile(googleAuth.access_token);
       
       // Check if account already exists in new structure
