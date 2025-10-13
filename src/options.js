@@ -1,6 +1,10 @@
 const maxSlotsInput = document.getElementById("maxSlots");
 const workStartHourInput = document.getElementById("workStartHour");
 const workEndHourInput = document.getElementById("workEndHour");
+const personalWeekdayStartHourInput = document.getElementById("personalWeekdayStartHour");
+const personalWeekdayEndHourInput = document.getElementById("personalWeekdayEndHour");
+const personalWeekendStartHourInput = document.getElementById("personalWeekendStartHour");
+const personalWeekendEndHourInput = document.getElementById("personalWeekendEndHour");
 const saveBtn = document.getElementById("save");
 const savedEl = document.getElementById("saved");
 const accountsListEl = document.getElementById("accounts-list");
@@ -38,6 +42,18 @@ async function load() {
   workStartHourInput.value = `${workStartHour.toString().padStart(2, '0')}:00`;
   workEndHourInput.value = `${workEndHour.toString().padStart(2, '0')}:00`;
   
+  // Load personal hours with defaults
+  const personalWeekdayStartHour = prefs?.personalWeekdayStartHour || 18;
+  const personalWeekdayEndHour = prefs?.personalWeekdayEndHour || 22;
+  const personalWeekendStartHour = prefs?.personalWeekendStartHour || 10;
+  const personalWeekendEndHour = prefs?.personalWeekendEndHour || 22;
+  
+  // Convert to time format (HH:MM)
+  personalWeekdayStartHourInput.value = `${personalWeekdayStartHour.toString().padStart(2, '0')}:00`;
+  personalWeekdayEndHourInput.value = `${personalWeekdayEndHour.toString().padStart(2, '0')}:00`;
+  personalWeekendStartHourInput.value = `${personalWeekendStartHour.toString().padStart(2, '0')}:00`;
+  personalWeekendEndHourInput.value = `${personalWeekendEndHour.toString().padStart(2, '0')}:00`;
+  
   await renderAccounts();
 }
 
@@ -53,15 +69,37 @@ async function save() {
   const workEndHour = workEndTime ? parseInt(workEndTime.split(':')[0], 10) : 17;
   
   // Validate work hours
-  const validatedStartHour = Math.max(0, Math.min(23, workStartHour));
-  const validatedEndHour = Math.max(0, Math.min(23, workEndHour));
+  const validatedWorkStartHour = Math.max(0, Math.min(23, workStartHour));
+  const validatedWorkEndHour = Math.max(0, Math.min(23, workEndHour));
+  
+  // Parse personal hours from time inputs
+  const personalWeekdayStartTime = personalWeekdayStartHourInput.value;
+  const personalWeekdayEndTime = personalWeekdayEndHourInput.value;
+  const personalWeekendStartTime = personalWeekendStartHourInput.value;
+  const personalWeekendEndTime = personalWeekendEndHourInput.value;
+  
+  // Convert time format (HH:MM) to hour number
+  const personalWeekdayStartHour = personalWeekdayStartTime ? parseInt(personalWeekdayStartTime.split(':')[0], 10) : 18;
+  const personalWeekdayEndHour = personalWeekdayEndTime ? parseInt(personalWeekdayEndTime.split(':')[0], 10) : 22;
+  const personalWeekendStartHour = personalWeekendStartTime ? parseInt(personalWeekendStartTime.split(':')[0], 10) : 10;
+  const personalWeekendEndHour = personalWeekendEndTime ? parseInt(personalWeekendEndTime.split(':')[0], 10) : 22;
+  
+  // Validate personal hours
+  const validatedPersonalWeekdayStartHour = Math.max(0, Math.min(23, personalWeekdayStartHour));
+  const validatedPersonalWeekdayEndHour = Math.max(0, Math.min(23, personalWeekdayEndHour));
+  const validatedPersonalWeekendStartHour = Math.max(0, Math.min(23, personalWeekendStartHour));
+  const validatedPersonalWeekendEndHour = Math.max(0, Math.min(23, personalWeekendEndHour));
   
   const current = (await chrome.storage.sync.get(["prefs"])).prefs || {};
   const updated = { 
     ...current, 
     maxSlots,
-    workStartHour: validatedStartHour,
-    workEndHour: validatedEndHour
+    workStartHour: validatedWorkStartHour,
+    workEndHour: validatedWorkEndHour,
+    personalWeekdayStartHour: validatedPersonalWeekdayStartHour,
+    personalWeekdayEndHour: validatedPersonalWeekdayEndHour,
+    personalWeekendStartHour: validatedPersonalWeekendStartHour,
+    personalWeekendEndHour: validatedPersonalWeekendEndHour
   };
   await chrome.storage.sync.set({ prefs: updated });
   savedEl.textContent = "Saved";

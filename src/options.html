@@ -36,6 +36,40 @@
       <div class="hint">Default work hours for availability calculation (default 9:00 AM - 5:00 PM).</div>
     </div>
     <div class="section">
+      <label>Out of Office / Non-Office Hours</label>
+      <div style="margin-top: 8px;">
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; color: #333;">Weekdays (Mon-Fri)</label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div>
+              <label for="personalWeekdayStartHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">Start Time</label>
+              <input id="personalWeekdayStartHour" type="time" style="width: 100px; padding: 6px 8px;" />
+            </div>
+            <div style="color: #666; font-size: 14px; margin-top: 20px;">to</div>
+            <div>
+              <label for="personalWeekdayEndHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">End Time</label>
+              <input id="personalWeekdayEndHour" type="time" style="width: 100px; padding: 6px 8px;" />
+            </div>
+          </div>
+        </div>
+        <div>
+          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; color: #333;">Weekends (Sat-Sun)</label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div>
+              <label for="personalWeekendStartHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">Start Time</label>
+              <input id="personalWeekendStartHour" type="time" style="width: 100px; padding: 6px 8px;" />
+            </div>
+            <div style="color: #666; font-size: 14px; margin-top: 20px;">to</div>
+            <div>
+              <label for="personalWeekendEndHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">End Time</label>
+              <input id="personalWeekendEndHour" type="time" style="width: 100px; padding: 6px 8px;" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hint">Personal/out-of-office hours for availability calculation (default: weekdays 6:00 PM - 10:00 PM, weekends 10:00 AM - 10:00 PM).</div>
+    </div>
+    <div class="section">
       <label>Google Accounts</label>
       <div id="accounts-list" style="display:flex; flex-direction:column; gap:12px; margin-top:8px;"></div>
       <div style="margin-top:12px; display:flex; gap:8px;">

@@ -69,7 +69,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "GET_PREFS") {
     (async () => {
       const { prefs } = await chrome.storage.sync.get(["prefs"]);
-      const defaults = { mode: "approachable", context: "work", maxSlots: 3, workStartHour: 9, workEndHour: 17 };
+      const defaults = { 
+        mode: "approachable", 
+        context: "work", 
+        maxSlots: 3, 
+        workStartHour: 9, 
+        workEndHour: 17,
+        personalWeekdayStartHour: 18,
+        personalWeekdayEndHour: 22,
+        personalWeekendStartHour: 10,
+        personalWeekendEndHour: 22
+      };
       sendResponse({ ok: true, prefs: { ...defaults, ...(prefs || {}) } });
     })();
     return true;
@@ -158,6 +168,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           workHours: {
             startHour: Number(prefs?.workStartHour)||9,
             endHour: Number(prefs?.workEndHour)||17
+          },
+          personalHours: {
+            weekdays: {
+              startHour: Number(prefs?.personalWeekdayStartHour)||18,
+              endHour: Number(prefs?.personalWeekdayEndHour)||22
+            },
+            weekends: {
+              startHour: Number(prefs?.personalWeekendStartHour)||10,
+              endHour: Number(prefs?.personalWeekendEndHour)||22
+            }
           }
         };
         const text = await generateAvailability(events, start, end, prefsSafe);
@@ -239,6 +259,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           workHours: {
             startHour: Number(prefs?.workStartHour)||9,
             endHour: Number(prefs?.workEndHour)||17
+          },
+          personalHours: {
+            weekdays: {
+              startHour: Number(prefs?.personalWeekdayStartHour)||18,
+              endHour: Number(prefs?.personalWeekdayEndHour)||22
+            },
+            weekends: {
+              startHour: Number(prefs?.personalWeekendStartHour)||10,
+              endHour: Number(prefs?.personalWeekendEndHour)||22
+            }
           }
         };
         const text = await generateAvailability(events, start, end, options);
