@@ -1,4 +1,6 @@
 const maxSlotsInput = document.getElementById("maxSlots");
+const workStartHourInput = document.getElementById("workStartHour");
+const workEndHourInput = document.getElementById("workEndHour");
 const saveBtn = document.getElementById("save");
 const savedEl = document.getElementById("saved");
 const accountsListEl = document.getElementById("accounts-list");
@@ -27,13 +29,40 @@ async function load() {
   const { prefs } = await chrome.storage.sync.get(["prefs"]);
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
+  
+  // Load work hours with defaults
+  const workStartHour = prefs?.workStartHour || 9;
+  const workEndHour = prefs?.workEndHour || 17;
+  
+  // Convert to time format (HH:MM)
+  workStartHourInput.value = `${workStartHour.toString().padStart(2, '0')}:00`;
+  workEndHourInput.value = `${workEndHour.toString().padStart(2, '0')}:00`;
+  
   await renderAccounts();
 }
 
 async function save() {
   const maxSlots = Math.max(1, Number(maxSlotsInput.value || 3));
+  
+  // Parse work hours from time inputs
+  const workStartTime = workStartHourInput.value;
+  const workEndTime = workEndHourInput.value;
+  
+  // Convert time format (HH:MM) to hour number
+  const workStartHour = workStartTime ? parseInt(workStartTime.split(':')[0], 10) : 9;
+  const workEndHour = workEndTime ? parseInt(workEndTime.split(':')[0], 10) : 17;
+  
+  // Validate work hours
+  const validatedStartHour = Math.max(0, Math.min(23, workStartHour));
+  const validatedEndHour = Math.max(0, Math.min(23, workEndHour));
+  
   const current = (await chrome.storage.sync.get(["prefs"])).prefs || {};
-  const updated = { ...current, maxSlots };
+  const updated = { 
+    ...current, 
+    maxSlots,
+    workStartHour: validatedStartHour,
+    workEndHour: validatedEndHour
+  };
   await chrome.storage.sync.set({ prefs: updated });
   savedEl.textContent = "Saved";
   setTimeout(() => (savedEl.textContent = ""), 1200);

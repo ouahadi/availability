@@ -21,6 +21,21 @@
       <div class="hint">Number of 1-hour slots to propose in Busy mode (default 3).</div>
     </div>
     <div class="section">
+      <label>Work Hours</label>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+        <div>
+          <label for="workStartHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">Start Time</label>
+          <input id="workStartHour" type="time" style="width: 100px; padding: 6px 8px;" />
+        </div>
+        <div style="color: #666; font-size: 14px; margin-top: 20px;">to</div>
+        <div>
+          <label for="workEndHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">End Time</label>
+          <input id="workEndHour" type="time" style="width: 100px; padding: 6px 8px;" />
+        </div>
+      </div>
+      <div class="hint">Default work hours for availability calculation (default 9:00 AM - 5:00 PM).</div>
+    </div>
+    <div class="section">
       <label>Google Accounts</label>
       <div id="accounts-list" style="display:flex; flex-direction:column; gap:12px; margin-top:8px;"></div>
       <div style="margin-top:12px; display:flex; gap:8px;">

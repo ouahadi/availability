@@ -1,6 +1,6 @@
 // Generate availability text for next 2 weeks with rules:
 // - 1h increments
-// - Business hours 10:00-18:00 local
+// - Business hours configurable (default 9:00-17:00 local)
 // - Exclude UK public holidays
 // - Add 1h padding before/after meetings with non-online location
 
@@ -118,19 +118,19 @@ function fmtTime(d) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-function getDayWindow(date, context) {
+function getDayWindow(date, context, workHours = { startHour: 9, endHour: 17 }) {
   const dow = date.getDay(); // 0 Sun, 6 Sat
   if (context === "personal") {
     if (dow === 0 || dow === 6) {
       // weekends 10:00-22:00
       return { start: setTimeLocal(date, 10, 0), end: setTimeLocal(date, 22, 0) };
     }
-    // weekdays evenings 18:00-22:00
-    return { start: setTimeLocal(date, 18, 0), end: setTimeLocal(date, 22, 0) };
+    // weekdays evenings start after work hours end
+    return { start: setTimeLocal(date, workHours.endHour, 0), end: setTimeLocal(date, 22, 0) };
   }
   // work context, weekdays only
   if (dow === 0 || dow === 6) return { start: null, end: null };
-  return { start: setTimeLocal(date, 10, 0), end: setTimeLocal(date, 18, 0) };
+  return { start: setTimeLocal(date, workHours.startHour, 0), end: setTimeLocal(date, workHours.endHour, 0) };
 }
 
 function splitIntoHourSlots(freeIntervals) {
@@ -145,7 +145,7 @@ function splitIntoHourSlots(freeIntervals) {
 }
 
 export async function generateAvailability(events, startDate, endDate, options = {}) {
-  const { context = "work", mode = "approachable", maxSlots = 3 } = options;
+  const { context = "work", mode = "approachable", maxSlots = 3, workHours = { startHour: 9, endHour: 17 } } = options;
   
   // Log event sources summary
   console.log(`🚀 Generating availability with ${events.length} events from ${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`);
@@ -169,7 +169,7 @@ export async function generateAvailability(events, startDate, endDate, options =
   let remainingSlots = Math.max(0, Number(maxSlots) || 0);
   for (let d = startOfDayLocal(startDate); d <= endDate; d = addDays(d, 1)) {
     if (mode === "busy" && remainingSlots <= 0) break;
-    const { start: rawStart, end: rawEnd } = getDayWindow(d, context);
+    const { start: rawStart, end: rawEnd } = getDayWindow(d, context, workHours);
     if (!rawStart || !rawEnd) continue; // skip days outside context
 
     const isoDate = d.toISOString().slice(0, 10);

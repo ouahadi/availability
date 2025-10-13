@@ -69,7 +69,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.type === "GET_PREFS") {
     (async () => {
       const { prefs } = await chrome.storage.sync.get(["prefs"]);
-      const defaults = { mode: "approachable", context: "work", maxSlots: 3 };
+      const defaults = { mode: "approachable", context: "work", maxSlots: 3, workStartHour: 9, workEndHour: 17 };
       sendResponse({ ok: true, prefs: { ...defaults, ...(prefs || {}) } });
     })();
     return true;
@@ -151,7 +151,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         
         const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
-        const prefsSafe = { mode: (prefs?.mode)||"approachable", context: (prefs?.context)||"work", maxSlots: Number(prefs?.maxSlots)||3 };
+        const prefsSafe = { 
+          mode: (prefs?.mode)||"approachable", 
+          context: (prefs?.context)||"work", 
+          maxSlots: Number(prefs?.maxSlots)||3,
+          workHours: {
+            startHour: Number(prefs?.workStartHour)||9,
+            endHour: Number(prefs?.workEndHour)||17
+          }
+        };
         const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });
       } catch (e) {
@@ -224,7 +232,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const selectedCalendars = prefs?.selectedCalendars || null;
         const activeAccounts = prefs?.activeAccounts || [];
         const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
-        const options = { mode, context, maxSlots };
+        const options = { 
+          mode, 
+          context, 
+          maxSlots,
+          workHours: {
+            startHour: Number(prefs?.workStartHour)||9,
+            endHour: Number(prefs?.workEndHour)||17
+          }
+        };
         const text = await generateAvailability(events, start, end, options);
         sendResponse({ ok: true, text });
       } catch (e) {
