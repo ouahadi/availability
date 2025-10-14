@@ -99,20 +99,171 @@ function subtractBusyFromWindow(windowStart, windowEnd, busyIntervals) {
   return free;
 }
 
-function formatDayAvailability(date, freeIntervals) {
+function formatDayAvailability(date, freeIntervals, context, personalHours) {
   const dayName = date.toLocaleDateString(undefined, { weekday: "long" });
   const dateStr = date.toLocaleDateString(undefined, { month: "long", day: "2-digit" });
   if (freeIntervals.length === 0) return `${dayName}, ${dateStr} - Unavailable`;
-  // Compress to human friendly phrasing
+  
+  // For personal context, use special phrasing patterns
+  if (context === "personal") {
+    return formatPersonalAvailability(dateStr, freeIntervals, personalHours);
+  }
+  
+  // For work context, use existing logic
   const totalFreeMs = freeIntervals.reduce((m, s) => m + (s.end - s.start), 0);
   const fullDay = freeIntervals.length === 1 && totalFreeMs >= 8 * 60 * 60 * 1000;
   const mostDay = totalFreeMs >= 5 * 60 * 60 * 1000; // 5+ hours
   if (fullDay) return `${dayName}, ${dateStr} - Anytime`;
   if (mostDay) {
-    // Phrase as Most of the day
+    // Find exceptions for "Most of the day"
+    const exceptions = findMostOfDayExceptions(freeIntervals, context === "personal" ? personalHours : null);
+    if (exceptions.length > 0) {
+      return `${dayName}, ${dateStr} - Most of the day, except ${exceptions.join(", ")}`;
+    }
     return `${dayName}, ${dateStr} - Most of the day`;
   }
   return `${dayName}, ${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+}
+
+function formatPersonalAvailability(dateStr, freeIntervals, personalHours) {
+  // Define time periods
+  const morning = { start: 10, end: 13 }; // 10 AM - 1 PM
+  const afternoon = { start: 13, end: 17 }; // 1 PM - 5 PM
+  const evening = { start: personalHours?.weekdays?.startHour || 18, end: personalHours?.weekdays?.endHour || 22 };
+  
+  // Check if we have full evening availability (18-22 on weekdays, or weekend evening)
+  const fullEvening = checkFullPeriod(freeIntervals, evening.start, evening.end);
+  
+  // Check for partial evening (after a specific time)
+  const partialEvening = checkPartialEvening(freeIntervals, evening.start, evening.end);
+  
+  // Check for morning availability
+  const fullMorning = checkFullPeriod(freeIntervals, morning.start, morning.end);
+  
+  // Check for afternoon availability
+  const fullAfternoon = checkFullPeriod(freeIntervals, afternoon.start, afternoon.end);
+  
+  // Check for full day (10 AM - 10 PM)
+  const fullDay = checkFullPeriod(freeIntervals, 10, 22);
+  
+  // Determine the best phrasing
+  if (fullDay) {
+    return `${dateStr}, anytime`;
+  }
+  
+  if (fullEvening && !fullMorning && !fullAfternoon) {
+    return `${dateStr}, evening`;
+  }
+  
+  if (partialEvening && !fullMorning && !fullAfternoon) {
+    return `${dateStr}, after ${fmtTime(new Date(0, 0, 0, partialEvening, 0))}`;
+  }
+  
+  if (fullMorning && fullAfternoon && !fullEvening) {
+    return `${dateStr}, morning or afternoon`;
+  }
+  
+  if (fullMorning && fullEvening && !fullAfternoon) {
+    return `${dateStr}, morning or evening`;
+  }
+  
+  if (fullAfternoon && fullEvening && !fullMorning) {
+    return `${dateStr}, afternoon or evening`;
+  }
+  
+  if (fullMorning && !fullAfternoon && !fullEvening) {
+    return `${dateStr}, morning`;
+  }
+  
+  if (fullAfternoon && !fullMorning && !fullEvening) {
+    return `${dateStr}, afternoon`;
+  }
+  
+  // If no patterns match, fall back to time ranges
+  return `${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+}
+
+function checkFullPeriod(freeIntervals, startHour, endHour) {
+  // Check if we have continuous availability for the entire period
+  const periodStartMs = startHour * 60 * 60 * 1000; // Convert to milliseconds
+  const periodEndMs = endHour * 60 * 60 * 1000;
+  
+  // Find intervals that cover this period
+  const coveringIntervals = freeIntervals.filter(interval => {
+    const intervalStartMs = interval.start.getHours() * 60 * 60 * 1000 + interval.start.getMinutes() * 60 * 1000;
+    const intervalEndMs = interval.end.getHours() * 60 * 60 * 1000 + interval.end.getMinutes() * 60 * 1000;
+    return intervalStartMs <= periodStartMs && intervalEndMs >= periodEndMs;
+  });
+  
+  return coveringIntervals.length > 0;
+}
+
+function checkPartialEvening(freeIntervals, eveningStartHour, eveningEndHour) {
+  // Check if we have evening availability starting after the normal evening start
+  const eveningIntervals = freeIntervals.filter(interval => {
+    const intervalStart = interval.start.getHours();
+    const intervalEnd = interval.end.getHours();
+    return intervalStart >= eveningStartHour && intervalEnd >= eveningStartHour + 1;
+  });
+  
+  if (eveningIntervals.length > 0) {
+    // Find the earliest evening start time
+    const earliestStart = Math.min(...eveningIntervals.map(interval => interval.start.getHours()));
+    if (earliestStart > eveningStartHour) {
+      return earliestStart;
+    }
+  }
+  
+  return null;
+}
+
+function findMostOfDayExceptions(freeIntervals, personalHours) {
+  // For work context, find gaps in a typical work day (9 AM - 5 PM)
+  // For personal context, find gaps in the full day (10 AM - 10 PM)
+  const startHour = personalHours ? 10 : 9;
+  const endHour = personalHours ? 22 : 17;
+  
+  // If no free intervals, the whole day is busy
+  if (freeIntervals.length === 0) {
+    return [`${startHour.toString().padStart(2, '0')}:00 to ${endHour.toString().padStart(2, '0')}:00`];
+  }
+  
+  // Create a list of all busy periods (gaps in free intervals)
+  const busyPeriods = [];
+  
+  // Sort intervals by start time
+  const sortedIntervals = freeIntervals.slice().sort((a, b) => a.start - b.start);
+  
+  // Use the first interval's date to establish the day window
+  const baseDate = new Date(sortedIntervals[0].start);
+  const dayStart = new Date(baseDate);
+  dayStart.setHours(startHour, 0, 0, 0);
+  const dayEnd = new Date(baseDate);
+  dayEnd.setHours(endHour, 0, 0, 0);
+  
+  // Check for gap at the beginning
+  const firstInterval = sortedIntervals[0];
+  if (firstInterval.start > dayStart) {
+    busyPeriods.push(`${fmtTime(dayStart)} to ${fmtTime(firstInterval.start)}`);
+  }
+  
+  // Check for gaps between intervals
+  for (let i = 0; i < sortedIntervals.length - 1; i++) {
+    const currentInterval = sortedIntervals[i];
+    const nextInterval = sortedIntervals[i + 1];
+    
+    if (currentInterval.end < nextInterval.start) {
+      busyPeriods.push(`${fmtTime(currentInterval.end)} to ${fmtTime(nextInterval.start)}`);
+    }
+  }
+  
+  // Check for gap at the end
+  const lastInterval = sortedIntervals[sortedIntervals.length - 1];
+  if (lastInterval.end < dayEnd) {
+    busyPeriods.push(`${fmtTime(lastInterval.end)} to ${fmtTime(dayEnd)}`);
+  }
+  
+  return busyPeriods;
 }
 
 function fmtTime(d) {
@@ -150,12 +301,14 @@ export async function generateAvailability(events, startDate, endDate, options =
     context = "work", 
     mode = "approachable", 
     maxSlots = 3, 
+    fullDayEventsBusy = false,
     workHours = { startHour: 9, endHour: 17 },
     personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } }
   } = options;
   
   // Log event sources summary
   console.log(`🚀 Generating availability with ${events.length} events from ${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`);
+  
   const sourceSummary = {};
   for (const ev of events) {
     if (ev.accountId && ev.calendarId) {
@@ -223,6 +376,21 @@ export async function generateAvailability(events, startDate, endDate, options =
       if (!ev.start || !ev.end) continue;
       let s = toLocalDate(ev.start);
       let e = toLocalDate(ev.end);
+      
+      // Check if this is an all-day event (date-only format, no time)
+      const isAllDay = ev.start.includes('T') === false && ev.end.includes('T') === false;
+      
+      // Skip all-day events unless fullDayEventsBusy is enabled
+      if (isAllDay && !fullDayEventsBusy) {
+        continue;
+      }
+      
+      // For all-day events when enabled, block the entire day window
+      if (isAllDay && fullDayEventsBusy) {
+        busy.push({ start: windowStart, end: windowEnd });
+        continue;
+      }
+      
       if (!isOnlineLocation(ev.location, ev.hangoutLink)) {
         s = new Date(s.getTime() - 60 * 60 * 1000);
         e = new Date(e.getTime() + 60 * 60 * 1000);
@@ -260,7 +428,7 @@ export async function generateAvailability(events, startDate, endDate, options =
       continue;
     }
 
-    if (free.length) out.push(formatDayAvailability(d, free));
+    if (free.length) out.push(formatDayAvailability(d, free, context, personalHours));
   }
   return out.join("\n");
 }

@@ -336,7 +336,13 @@ export async function fetchEventsForCalendars(clientId, calendarIds, timeMinIso,
 
 // Multi-account event fetching
 export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, timeMinIso, timeMaxIso) {
+  console.log(`🚀 Starting multi-account event fetch:`);
+  console.log(`   📅 Account IDs: ${accountIds ? accountIds.join(', ') : 'none'}`);
+  console.log(`   📅 Calendar IDs: ${calendarIds ? calendarIds.join(', ') : 'all calendars'}`);
+  console.log(`   📅 Time range: ${timeMinIso} to ${timeMaxIso}`);
+  
   if (!accountIds || accountIds.length === 0) {
+    console.log(`📅 No account IDs provided, falling back to single account mode`);
     return await fetchEventsForCalendars(clientId, calendarIds, timeMinIso, timeMaxIso);
   }
 
@@ -344,21 +350,31 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
   
   // Group calendar IDs by account
   const calendarsByAccount = {};
-  for (const calendarId of (calendarIds || [])) {
-    // Check if this is already a prefixed calendar ID
-    if (calendarId.includes(':') && calendarId.startsWith('google_')) {
-      const [accountId, originalId] = calendarId.split(':', 2);
-      if (!calendarsByAccount[accountId]) {
-        calendarsByAccount[accountId] = [];
-      }
-      calendarsByAccount[accountId].push(originalId);
-    } else {
-      // This is an unprefixed calendar ID, add it to all accounts
-      for (const accountId of accountIds) {
+  
+  // If no specific calendars are selected, we need to fetch all calendars for each account
+  if (!calendarIds || calendarIds.length === 0) {
+    // For each account, we'll fetch all their calendars
+    for (const accountId of accountIds) {
+      calendarsByAccount[accountId] = ["primary"]; // Start with primary, will be expanded by fetching calendar list
+    }
+  } else {
+    // Process selected calendars
+    for (const calendarId of calendarIds) {
+      // Check if this is already a prefixed calendar ID
+      if (calendarId.includes(':') && calendarId.startsWith('google_')) {
+        const [accountId, originalId] = calendarId.split(':', 2);
         if (!calendarsByAccount[accountId]) {
           calendarsByAccount[accountId] = [];
         }
-        calendarsByAccount[accountId].push(calendarId);
+        calendarsByAccount[accountId].push(originalId);
+      } else {
+        // This is an unprefixed calendar ID, add it to all accounts
+        for (const accountId of accountIds) {
+          if (!calendarsByAccount[accountId]) {
+            calendarsByAccount[accountId] = [];
+          }
+          calendarsByAccount[accountId].push(calendarId);
+        }
       }
     }
   }
@@ -368,7 +384,37 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
       const accessToken = await getValidAccessTokenForAccount(accountId, clientId);
       if (!accessToken) continue;
 
-      const accountCalendarIds = calendarsByAccount[accountId] || ["primary"];
+      let accountCalendarIds = calendarsByAccount[accountId] || ["primary"];
+      
+      // If no specific calendars are selected, fetch all calendars for this account
+      if (!calendarIds || calendarIds.length === 0) {
+        console.log(`📅 No specific calendars selected, fetching all calendars for account ${accountId}`);
+        try {
+          const url = new URL(CALENDAR_LIST_ENDPOINT);
+          url.searchParams.set("minAccessRole", "reader");
+          
+          const resp = await fetch(url.toString(), { 
+            headers: { Authorization: `Bearer ${accessToken}` } 
+          });
+          
+          if (resp.ok) {
+            const data = await resp.json();
+            const items = data.items || [];
+            // Get all calendar IDs that the user has access to
+            accountCalendarIds = items.map(item => item.id);
+            console.log(`📅 Found ${accountCalendarIds.length} calendars for account ${accountId}:`, accountCalendarIds);
+          } else {
+            console.warn(`Failed to fetch calendar list for account ${accountId}: ${resp.status} ${resp.statusText}`);
+            accountCalendarIds = ["primary"];
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch calendar list for account ${accountId}:`, error);
+          // Fall back to primary calendar
+          accountCalendarIds = ["primary"];
+        }
+      } else {
+        console.log(`📅 Using selected calendars for account ${accountId}:`, accountCalendarIds);
+      }
       
       for (const originalId of accountCalendarIds) {
         // Handle special calendar IDs
@@ -393,12 +439,14 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
             url.searchParams.set("pageToken", nextPageToken);
           }
           
+          console.log(`🔍 Fetching events from calendar "${calendarId}" (original: "${originalId}") for account ${accountId}`);
+          
           const resp = await fetch(url.toString(), { 
             headers: { Authorization: `Bearer ${accessToken}` } 
           });
           
           if (!resp.ok) {
-            console.warn(`Failed to fetch events for calendar ${calendarId}: ${resp.status} ${resp.statusText}`);
+            console.warn(`❌ Failed to fetch events for calendar ${calendarId}: ${resp.status} ${resp.statusText}`);
             break;
           }
           
@@ -416,6 +464,7 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
           
           allEvents.push(...events);
           totalEventsFromThisCalendar += events.length;
+          console.log(`📅 Found ${events.length} events on this page from calendar "${calendarId}"`);
           nextPageToken = data.nextPageToken;
           
         } while (nextPageToken);
@@ -430,7 +479,9 @@ export async function fetchEventsForAccounts(clientId, accountIds, calendarIds, 
   }
   
   // Sort by start time
-  return allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+  const sortedEvents = allEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+  console.log(`✅ Multi-account event fetch completed: ${sortedEvents.length} total events found`);
+  return sortedEvents;
 }
 
 // Helper function to get access token for specific account

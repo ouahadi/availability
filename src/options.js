@@ -1,4 +1,5 @@
 const maxSlotsInput = document.getElementById("maxSlots");
+const fullDayEventsBusyInput = document.getElementById("fullDayEventsBusy");
 const workStartHourInput = document.getElementById("workStartHour");
 const workEndHourInput = document.getElementById("workEndHour");
 const personalWeekdayStartHourInput = document.getElementById("personalWeekdayStartHour");
@@ -34,6 +35,10 @@ async function load() {
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
   
+  // Load full-day events setting (default: false - don't mark as busy)
+  const fullDayEventsBusy = prefs?.fullDayEventsBusy || false;
+  fullDayEventsBusyInput.checked = fullDayEventsBusy;
+  
   // Load work hours with defaults
   const workStartHour = prefs?.workStartHour || 9;
   const workEndHour = prefs?.workEndHour || 17;
@@ -59,6 +64,9 @@ async function load() {
 
 async function save() {
   const maxSlots = Math.max(1, Number(maxSlotsInput.value || 3));
+  
+  // Get full-day events setting
+  const fullDayEventsBusy = fullDayEventsBusyInput.checked;
   
   // Parse work hours from time inputs
   const workStartTime = workStartHourInput.value;
@@ -94,6 +102,7 @@ async function save() {
   const updated = { 
     ...current, 
     maxSlots,
+    fullDayEventsBusy,
     workStartHour: validatedWorkStartHour,
     workEndHour: validatedWorkEndHour,
     personalWeekdayStartHour: validatedPersonalWeekdayStartHour,

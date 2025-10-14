@@ -73,6 +73,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         mode: "approachable", 
         context: "work", 
         maxSlots: 3, 
+        fullDayEventsBusy: false,
         workStartHour: 9, 
         workEndHour: 17,
         personalWeekdayStartHour: 18,
@@ -161,25 +162,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         
         const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
-        const prefsSafe = { 
-          mode: (prefs?.mode)||"approachable", 
-          context: (prefs?.context)||"work", 
-          maxSlots: Number(prefs?.maxSlots)||3,
-          workHours: {
-            startHour: Number(prefs?.workStartHour)||9,
-            endHour: Number(prefs?.workEndHour)||17
-          },
-          personalHours: {
-            weekdays: {
-              startHour: Number(prefs?.personalWeekdayStartHour)||18,
-              endHour: Number(prefs?.personalWeekdayEndHour)||22
-            },
-            weekends: {
-              startHour: Number(prefs?.personalWeekendStartHour)||10,
-              endHour: Number(prefs?.personalWeekendEndHour)||22
-            }
-          }
-        };
+    const prefsSafe = { 
+      mode: (prefs?.mode)||"approachable", 
+      context: (prefs?.context)||"work", 
+      maxSlots: Number(prefs?.maxSlots)||3,
+      fullDayEventsBusy: Boolean(prefs?.fullDayEventsBusy)||false,
+      workHours: {
+        startHour: Number(prefs?.workStartHour)||9,
+        endHour: Number(prefs?.workEndHour)||17
+      },
+      personalHours: {
+        weekdays: {
+          startHour: Number(prefs?.personalWeekdayStartHour)||18,
+          endHour: Number(prefs?.personalWeekdayEndHour)||22
+        },
+        weekends: {
+          startHour: Number(prefs?.personalWeekendStartHour)||10,
+          endHour: Number(prefs?.personalWeekendEndHour)||22
+        }
+      }
+    };
         const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });
       } catch (e) {
