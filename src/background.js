@@ -73,7 +73,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         mode: "approachable", 
         context: "work", 
         maxSlots: 3, 
-        fullDayEventsBusy: false,
         workStartHour: 9, 
         workEndHour: 17,
         personalWeekdayStartHour: 18,
@@ -166,7 +165,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       mode: (prefs?.mode)||"approachable", 
       context: (prefs?.context)||"work", 
       maxSlots: Number(prefs?.maxSlots)||3,
-      fullDayEventsBusy: Boolean(prefs?.fullDayEventsBusy)||false,
+      fullDayEventsBusyCalendars: new Set(prefs?.fullDayEventsBusyCalendars || []),
       workHours: {
         startHour: Number(prefs?.workStartHour)||9,
         endHour: Number(prefs?.workEndHour)||17
@@ -258,6 +257,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           mode, 
           context, 
           maxSlots,
+          fullDayEventsBusyCalendars: new Set(prefs?.fullDayEventsBusyCalendars || []),
           workHours: {
             startHour: Number(prefs?.workStartHour)||9,
             endHour: Number(prefs?.workEndHour)||17

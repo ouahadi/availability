@@ -1,5 +1,4 @@
 const maxSlotsInput = document.getElementById("maxSlots");
-const fullDayEventsBusyInput = document.getElementById("fullDayEventsBusy");
 const workStartHourInput = document.getElementById("workStartHour");
 const workEndHourInput = document.getElementById("workEndHour");
 const personalWeekdayStartHourInput = document.getElementById("personalWeekdayStartHour");
@@ -35,10 +34,6 @@ async function load() {
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
   
-  // Load full-day events setting (default: false - don't mark as busy)
-  const fullDayEventsBusy = prefs?.fullDayEventsBusy || false;
-  fullDayEventsBusyInput.checked = fullDayEventsBusy;
-  
   // Load work hours with defaults
   const workStartHour = prefs?.workStartHour || 9;
   const workEndHour = prefs?.workEndHour || 17;
@@ -64,9 +59,6 @@ async function load() {
 
 async function save() {
   const maxSlots = Math.max(1, Number(maxSlotsInput.value || 3));
-  
-  // Get full-day events setting
-  const fullDayEventsBusy = fullDayEventsBusyInput.checked;
   
   // Parse work hours from time inputs
   const workStartTime = workStartHourInput.value;
@@ -102,7 +94,6 @@ async function save() {
   const updated = { 
     ...current, 
     maxSlots,
-    fullDayEventsBusy,
     workStartHour: validatedWorkStartHour,
     workEndHour: validatedWorkEndHour,
     personalWeekdayStartHour: validatedPersonalWeekdayStartHour,
@@ -135,6 +126,7 @@ async function renderAccounts() {
     const { prefs } = await chrome.storage.sync.get(["prefs"]);
     const selectedCalendars = new Set((prefs?.selectedCalendars) || []);
     const activeAccounts = new Set((prefs?.activeAccounts) || []);
+    const fullDayEventsBusyCalendars = new Set((prefs?.fullDayEventsBusyCalendars) || []);
 
     accountsListEl.innerHTML = "";
 
@@ -219,22 +211,27 @@ async function renderAccounts() {
         for (const cal of accountCalendars) {
           const calId = `cal-${btoa(cal.id).replace(/=/g, "")}`;
           const calWrapper = document.createElement("div");
-          calWrapper.style.display = "flex";
-          calWrapper.style.alignItems = "center";
-          calWrapper.style.justifyContent = "space-between";
-          calWrapper.style.gap = "10px";
-          calWrapper.style.padding = "6px 10px";
+          calWrapper.style.padding = "8px 10px";
           calWrapper.style.borderRadius = "4px";
           calWrapper.style.background = "#f5f5f5";
           calWrapper.style.border = "1px solid #ddd";
           calWrapper.style.fontSize = "12px";
           calWrapper.style.marginBottom = "2px";
 
+          // Calendar header with name and selection checkbox
+          const calHeader = document.createElement("div");
+          calHeader.style.display = "flex";
+          calHeader.style.alignItems = "center";
+          calHeader.style.justifyContent = "space-between";
+          calHeader.style.gap = "10px";
+          calHeader.style.marginBottom = "4px";
+
           const calLabel = document.createElement("label");
           calLabel.htmlFor = calId;
           calLabel.textContent = cal.summary;
           calLabel.style.cursor = "pointer";
           calLabel.style.flex = "1";
+          calLabel.style.fontWeight = "500";
 
           const calCheckbox = document.createElement("input");
           calCheckbox.type = "checkbox";
@@ -251,8 +248,44 @@ async function renderAccounts() {
             await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { selectedCalendars: Array.from(newSelected) } });
           });
 
-          calWrapper.appendChild(calLabel);
-          calWrapper.appendChild(calCheckbox);
+          calHeader.appendChild(calLabel);
+          calHeader.appendChild(calCheckbox);
+
+          // Full-day events setting
+          const fullDaySetting = document.createElement("div");
+          fullDaySetting.style.display = "flex";
+          fullDaySetting.style.alignItems = "center";
+          fullDaySetting.style.gap = "6px";
+          fullDaySetting.style.marginLeft = "8px";
+
+          const fullDayCheckboxId = `fullday-${btoa(cal.id).replace(/=/g, "")}`;
+          const fullDayCheckbox = document.createElement("input");
+          fullDayCheckbox.type = "checkbox";
+          fullDayCheckbox.id = fullDayCheckboxId;
+          fullDayCheckbox.checked = fullDayEventsBusyCalendars.has(cal.id);
+          fullDayCheckbox.style.cursor = "pointer";
+          fullDayCheckbox.addEventListener("change", async () => {
+            const newFullDayBusy = new Set(fullDayEventsBusyCalendars);
+            if (fullDayCheckbox.checked) {
+              newFullDayBusy.add(cal.id);
+            } else {
+              newFullDayBusy.delete(cal.id);
+            }
+            await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { fullDayEventsBusyCalendars: Array.from(newFullDayBusy) } });
+          });
+
+          const fullDayLabel = document.createElement("label");
+          fullDayLabel.htmlFor = fullDayCheckboxId;
+          fullDayLabel.textContent = "Mark all-day events as busy";
+          fullDayLabel.style.cursor = "pointer";
+          fullDayLabel.style.fontSize = "11px";
+          fullDayLabel.style.color = "#666";
+
+          fullDaySetting.appendChild(fullDayCheckbox);
+          fullDaySetting.appendChild(fullDayLabel);
+
+          calWrapper.appendChild(calHeader);
+          calWrapper.appendChild(fullDaySetting);
           calendarsContainer.appendChild(calWrapper);
         }
         accountWrapper.appendChild(calendarsContainer);

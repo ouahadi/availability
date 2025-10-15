@@ -301,7 +301,7 @@ export async function generateAvailability(events, startDate, endDate, options =
     context = "work", 
     mode = "approachable", 
     maxSlots = 3, 
-    fullDayEventsBusy = false,
+    fullDayEventsBusyCalendars = new Set(),
     workHours = { startHour: 9, endHour: 17 },
     personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } }
   } = options;
@@ -380,14 +380,13 @@ export async function generateAvailability(events, startDate, endDate, options =
       // Check if this is an all-day event (date-only format, no time)
       const isAllDay = ev.start.includes('T') === false && ev.end.includes('T') === false;
       
-      // Skip all-day events unless fullDayEventsBusy is enabled
-      if (isAllDay && !fullDayEventsBusy) {
-        continue;
-      }
-      
-      // For all-day events when enabled, block the entire day window
-      if (isAllDay && fullDayEventsBusy) {
-        busy.push({ start: windowStart, end: windowEnd });
+      // For all-day events, check if this calendar is configured to mark them as busy
+      if (isAllDay) {
+        // Check if this event's calendar is in the fullDayEventsBusyCalendars set
+        const calendarId = ev.calendarId || ev.accountId;
+        if (fullDayEventsBusyCalendars.has(calendarId)) {
+          busy.push({ start: windowStart, end: windowEnd });
+        }
         continue;
       }
       
