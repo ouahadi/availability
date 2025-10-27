@@ -1,4 +1,5 @@
 const maxSlotsInput = document.getElementById("maxSlots");
+const showTimezoneInput = document.getElementById("showTimezone");
 const workStartHourInput = document.getElementById("workStartHour");
 const workEndHourInput = document.getElementById("workEndHour");
 const personalWeekdayStartHourInput = document.getElementById("personalWeekdayStartHour");
@@ -33,6 +34,10 @@ async function load() {
   const { prefs } = await chrome.storage.sync.get(["prefs"]);
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
+  
+  // Load timezone display setting (default: true)
+  const showTimezone = prefs?.showTimezone !== undefined ? prefs.showTimezone : true;
+  showTimezoneInput.checked = showTimezone;
   
   // Load work hours with defaults
   const workStartHour = prefs?.workStartHour || 9;
@@ -94,6 +99,7 @@ async function save() {
   const updated = { 
     ...current, 
     maxSlots,
+    showTimezone: showTimezoneInput.checked,
     workStartHour: validatedWorkStartHour,
     workEndHour: validatedWorkEndHour,
     personalWeekdayStartHour: validatedPersonalWeekdayStartHour,

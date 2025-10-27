@@ -99,14 +99,14 @@ function subtractBusyFromWindow(windowStart, windowEnd, busyIntervals) {
   return free;
 }
 
-function formatDayAvailability(date, freeIntervals, context, personalHours) {
+function formatDayAvailability(date, freeIntervals, context, personalHours, showTimezone = true) {
   const dayName = date.toLocaleDateString(undefined, { weekday: "long" });
   const dateStr = date.toLocaleDateString(undefined, { month: "long", day: "2-digit" });
   if (freeIntervals.length === 0) return `${dayName}, ${dateStr} - Unavailable`;
   
   // For personal context, use special phrasing patterns
   if (context === "personal") {
-    return formatPersonalAvailability(dateStr, freeIntervals, personalHours);
+    return formatPersonalAvailability(dateStr, freeIntervals, personalHours, showTimezone);
   }
   
   // For work context, use existing logic
@@ -116,16 +116,16 @@ function formatDayAvailability(date, freeIntervals, context, personalHours) {
   if (fullDay) return `${dayName}, ${dateStr} - Anytime`;
   if (mostDay) {
     // Find exceptions for "Most of the day"
-    const exceptions = findMostOfDayExceptions(freeIntervals, context === "personal" ? personalHours : null);
+    const exceptions = findMostOfDayExceptions(freeIntervals, context === "personal" ? personalHours : null, showTimezone);
     if (exceptions.length > 0) {
       return `${dayName}, ${dateStr} - Most of the day, except ${exceptions.join(", ")}`;
     }
     return `${dayName}, ${dateStr} - Most of the day`;
   }
-  return `${dayName}, ${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+  return `${dayName}, ${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
 }
 
-function formatPersonalAvailability(dateStr, freeIntervals, personalHours) {
+function formatPersonalAvailability(dateStr, freeIntervals, personalHours, showTimezone = true) {
   // Define time periods
   const morning = { start: 10, end: 13 }; // 10 AM - 1 PM
   const afternoon = { start: 13, end: 17 }; // 1 PM - 5 PM
@@ -156,7 +156,7 @@ function formatPersonalAvailability(dateStr, freeIntervals, personalHours) {
   }
   
   if (partialEvening && !fullMorning && !fullAfternoon) {
-    return `${dateStr}, after ${fmtTime(new Date(0, 0, 0, partialEvening, 0))}`;
+    return `${dateStr}, after ${fmtTime(new Date(0, 0, 0, partialEvening, 0), showTimezone)}`;
   }
   
   if (fullMorning && fullAfternoon && !fullEvening) {
@@ -180,7 +180,7 @@ function formatPersonalAvailability(dateStr, freeIntervals, personalHours) {
   }
   
   // If no patterns match, fall back to time ranges
-  return `${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+  return `${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
 }
 
 function checkFullPeriod(freeIntervals, startHour, endHour) {
@@ -217,7 +217,7 @@ function checkPartialEvening(freeIntervals, eveningStartHour, eveningEndHour) {
   return null;
 }
 
-function findMostOfDayExceptions(freeIntervals, personalHours) {
+function findMostOfDayExceptions(freeIntervals, personalHours, showTimezone = true) {
   // For work context, find gaps in a typical work day (9 AM - 5 PM)
   // For personal context, find gaps in the full day (10 AM - 10 PM)
   const startHour = personalHours ? 10 : 9;
@@ -244,7 +244,7 @@ function findMostOfDayExceptions(freeIntervals, personalHours) {
   // Check for gap at the beginning
   const firstInterval = sortedIntervals[0];
   if (firstInterval.start > dayStart) {
-    busyPeriods.push(`${fmtTime(dayStart)} to ${fmtTime(firstInterval.start)}`);
+    busyPeriods.push(`${fmtTime(dayStart, showTimezone)} to ${fmtTime(firstInterval.start, showTimezone)}`);
   }
   
   // Check for gaps between intervals
@@ -253,21 +253,23 @@ function findMostOfDayExceptions(freeIntervals, personalHours) {
     const nextInterval = sortedIntervals[i + 1];
     
     if (currentInterval.end < nextInterval.start) {
-      busyPeriods.push(`${fmtTime(currentInterval.end)} to ${fmtTime(nextInterval.start)}`);
+      busyPeriods.push(`${fmtTime(currentInterval.end, showTimezone)} to ${fmtTime(nextInterval.start, showTimezone)}`);
     }
   }
   
   // Check for gap at the end
   const lastInterval = sortedIntervals[sortedIntervals.length - 1];
   if (lastInterval.end < dayEnd) {
-    busyPeriods.push(`${fmtTime(lastInterval.end)} to ${fmtTime(dayEnd)}`);
+    busyPeriods.push(`${fmtTime(lastInterval.end, showTimezone)} to ${fmtTime(dayEnd, showTimezone)}`);
   }
   
   return busyPeriods;
 }
 
-function fmtTime(d) {
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+function fmtTime(d, showTimezone = false) {
+  const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  // Don't show timezone in individual time stamps - will be shown in header instead
+  return timeStr;
 }
 
 function getDayWindow(date, context, workHours = { startHour: 9, endHour: 17 }, personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } }) {
@@ -301,6 +303,7 @@ export async function generateAvailability(events, startDate, endDate, options =
     context = "work", 
     mode = "approachable", 
     maxSlots = 3, 
+    showTimezone = true,
     fullDayEventsBusyCalendars = new Set(),
     workHours = { startHour: 9, endHour: 17 },
     personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } }
@@ -352,8 +355,17 @@ export async function generateAvailability(events, startDate, endDate, options =
 
     // build busy with padding for travel if needed
     const dayEvents = events.filter(ev => {
+      if (!ev.start || !ev.end) return false;
       const s = toLocalDate(ev.start);
-      return isSameDay(s, d);
+      const e = toLocalDate(ev.end);
+      
+      // Include events that:
+      // 1. Start on this day, OR
+      // 2. Started before this day but end on or after this day (multi-day events)
+      const dayStart = startOfDayLocal(d);
+      const dayEnd = addDays(dayStart, 1);
+      
+      return (s >= dayStart && s < dayEnd) || (s < dayStart && e > dayStart);
     });
     
     // Log events being processed for this day
@@ -420,14 +432,14 @@ export async function generateAvailability(events, startDate, endDate, options =
       const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
       const limited = adjacent.slice(0, Math.max(0, remainingSlots));
       if (limited.length) {
-        const line = `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })} - ${limited.map(s => `${fmtTime(s.start)}-${fmtTime(s.end)}`).join(" and ")}`;
+        const line = `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })} - ${limited.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
         out.push(line);
         remainingSlots -= limited.length;
       }
       continue;
     }
 
-    if (free.length) out.push(formatDayAvailability(d, free, context, personalHours));
+    if (free.length) out.push(formatDayAvailability(d, free, context, personalHours, showTimezone));
   }
   return out.join("\n");
 }

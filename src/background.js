@@ -165,6 +165,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       mode: (prefs?.mode)||"approachable", 
       context: (prefs?.context)||"work", 
       maxSlots: Number(prefs?.maxSlots)||3,
+      showTimezone: prefs?.showTimezone !== undefined ? prefs.showTimezone : true,
       fullDayEventsBusyCalendars: new Set(prefs?.fullDayEventsBusyCalendars || []),
       workHours: {
         startHour: Number(prefs?.workStartHour)||9,
@@ -257,6 +258,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           mode, 
           context, 
           maxSlots,
+          showTimezone: prefs?.showTimezone !== undefined ? prefs.showTimezone : true,
           fullDayEventsBusyCalendars: new Set(prefs?.fullDayEventsBusyCalendars || []),
           workHours: {
             startHour: Number(prefs?.workStartHour)||9,

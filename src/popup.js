@@ -19,6 +19,7 @@ const ctxPersonal = document.getElementById("ctx-personal");
 const ctxWork = document.getElementById("ctx-work");
 const modeSwitch = document.getElementById("mode-switch");
 const contextSegment = document.getElementById("context-segment");
+const targetTimezoneSelect = document.getElementById("target-timezone");
 
 // Check if already authenticated on load
 async function checkAuthStatus() {
@@ -49,6 +50,9 @@ async function showAuthenticatedState() {
   accountsSection.classList.remove("hidden");
   availabilitySection.classList.remove("hidden");
   statusEl.textContent = "";
+  
+  // Populate timezone options
+  populateTimezoneOptions();
   
   // Load and display accounts
   await renderAccounts();
@@ -219,6 +223,105 @@ async function savePrefs() {
   await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context } });
 }
 
+// Populate timezone options
+function populateTimezoneOptions() {
+  // Common timezone offsets from UTC
+  const timezones = [
+    { offset: -12, name: "UTC-12" },
+    { offset: -11, name: "UTC-11" },
+    { offset: -10, name: "UTC-10" },
+    { offset: -9, name: "UTC-9" },
+    { offset: -8, name: "UTC-8" },
+    { offset: -7, name: "UTC-7" },
+    { offset: -6, name: "UTC-6" },
+    { offset: -5, name: "UTC-5" },
+    { offset: -4, name: "UTC-4" },
+    { offset: -3, name: "UTC-3" },
+    { offset: -2, name: "UTC-2" },
+    { offset: -1, name: "UTC-1" },
+    { offset: 0, name: "UTC+0" },
+    { offset: 1, name: "UTC+1" },
+    { offset: 2, name: "UTC+2" },
+    { offset: 3, name: "UTC+3" },
+    { offset: 4, name: "UTC+4" },
+    { offset: 5, name: "UTC+5" },
+    { offset: 6, name: "UTC+6" },
+    { offset: 7, name: "UTC+7" },
+    { offset: 8, name: "UTC+8" },
+    { offset: 9, name: "UTC+9" },
+    { offset: 10, name: "UTC+10" },
+    { offset: 11, name: "UTC+11" },
+    { offset: 12, name: "UTC+12" }
+  ];
+  
+  // Get local timezone offset
+  const localOffset = -new Date().getTimezoneOffset() / 60;
+  
+  // Add local timezone option
+  targetTimezoneSelect.innerHTML = '<option value="local">My Timezone (Local)</option>';
+  
+  // Add other timezone options
+  for (const tz of timezones) {
+    if (tz.offset === localOffset) continue; // Skip local as it's already added
+    const option = document.createElement('option');
+    option.value = tz.offset;
+    option.textContent = `GMT${tz.offset >= 0 ? '+' : ''}${tz.offset} (${tz.name})`;
+    targetTimezoneSelect.appendChild(option);
+  }
+}
+
+// Convert availability text to target timezone
+function convertAvailabilityToTimezone(text, targetOffset) {
+  const localOffset = -new Date().getTimezoneOffset() / 60;
+  
+  // Remove any existing header
+  const cleanedText = text.replace(/^My availability in .+? is as follows:\s*\n*/i, '').trim();
+  
+  // Always add header with current timezone info
+  let header = "";
+  if (targetOffset === "local") {
+    header = `My availability in GMT${localOffset >= 0 ? '+' : ''}${localOffset} is as follows:\n\n`;
+    return header + cleanedText;
+  } else {
+    const offsetDiff = targetOffset - localOffset;
+    
+    // Parse availability text and convert times
+    const lines = cleanedText.split('\n');
+    const converted = lines.map(line => {
+      if (!line.trim()) return line;
+      
+      // Check if this is a time range line
+      const timeRangeMatch = line.match(/(.+?)\s+-\s+(\d{2}):(\d{2})[:\s]*-(\d{2}):(\d{2})/);
+      if (timeRangeMatch) {
+        const [, datePart, startH, startM, endH, endM] = timeRangeMatch;
+        
+        // Convert times
+        const startTime = addHours(parseInt(startH), parseInt(startM), offsetDiff);
+        const endTime = addHours(parseInt(endH), parseInt(endM), offsetDiff);
+        
+        return `${datePart} - ${startTime.hours.toString().padStart(2, '0')}:${startTime.minutes.toString().padStart(2, '0')}-${endTime.hours.toString().padStart(2, '0')}:${endTime.minutes.toString().padStart(2, '0')}`;
+      }
+      
+      return line;
+    });
+    
+    const targetOffsetStr = `GMT ${targetOffset >= 0 ? '+' : ''}${targetOffset}`;
+    header = `My availability in ${targetOffsetStr} is as follows:\n\n`;
+    
+    return header + converted.join('\n');
+  }
+}
+
+// Helper function to add hours to time
+function addHours(hours, minutes, hoursToAdd) {
+  const totalMinutes = hours * 60 + minutes + hoursToAdd * 60;
+  const resultHours = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  return {
+    hours: Math.floor(resultHours / 60),
+    minutes: resultHours % 60
+  };
+}
+
 // Auth button
 authButton.addEventListener("click", async () => {
   statusEl.textContent = "Connecting...";
@@ -276,7 +379,12 @@ async function autoGenerateAvailability() {
       statusEl.textContent = `Generation failed: ${friendlyError}`;
       return;
     }
-    availabilityEl.value = res.text;
+    
+    // Apply timezone conversion
+    const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
+    const convertedText = convertAvailabilityToTimezone(res.text, targetOffset);
+    
+    availabilityEl.value = convertedText;
     statusEl.textContent = "Auto-generated & copied to clipboard";
     
     // Auto-copy to clipboard
@@ -304,7 +412,12 @@ copyBtn.addEventListener("click", async () => {
       statusEl.textContent = `Generation failed: ${friendlyError}`;
       return;
     }
-    availabilityEl.value = res.text;
+    
+    // Apply timezone conversion
+    const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
+    const convertedText = convertAvailabilityToTimezone(res.text, targetOffset);
+    
+    availabilityEl.value = convertedText;
     statusEl.textContent = "Copied to clipboard";
     availabilityEl.focus();
     availabilityEl.select();
@@ -345,6 +458,24 @@ contextSegment.addEventListener("click", async (e) => {
   ctxWork.checked = val !== "personal";
   await savePrefs();
   await autoGenerateAvailability();
+});
+
+// Timezone selector change handler
+targetTimezoneSelect.addEventListener("change", async () => {
+  // Reconvert the current availability text
+  const currentText = availabilityEl.value;
+  if (currentText) {
+    const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
+    const convertedText = convertAvailabilityToTimezone(currentText, targetOffset);
+    availabilityEl.value = convertedText;
+    
+    // Copy to clipboard
+    availabilityEl.focus();
+    availabilityEl.select();
+    document.execCommand("copy");
+    toastEl.classList.add("show");
+    setTimeout(() => toastEl.classList.remove("show"), 1200);
+  }
 });
 
 

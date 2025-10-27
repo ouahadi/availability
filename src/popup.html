@@ -304,6 +304,13 @@
             <input type="radio" name="context" value="work" id="ctx-work" class="visually-hidden" checked />
           </div>
         </div>
+        <div style="margin-bottom:12px;">
+          <div class="availability-label">Target Timezone</div>
+          <select id="target-timezone" style="width:100%; padding:8px; border-radius:8px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; font-size:14px;">
+            <option value="local">My Timezone (Local)</option>
+            <!-- Options will be populated dynamically -->
+          </select>
+        </div>
         <div class="availability-label">Your availability (next 2 weeks)</div>
         <button id="gen-availability" class="button" style="display:flex; align-items:center; justify-content:center; gap:8px;">
           <span>📋</span>
