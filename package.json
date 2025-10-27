@@ -1,8 +1,8 @@
 {
-  "name": "availability-extension",
+  "name": "timepaste",
   "version": "0.0.1",
   "private": true,
-  "description": "Starter Chrome extension boilerplate (MV3)",
+  "description": "Generate and share your calendar availability in any timezone",
   "scripts": {
     "zip": "zip -r dist.zip manifest.json src -x '*.DS_Store'"
   }

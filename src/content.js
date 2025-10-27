@@ -1,11 +1,11 @@
 // Content script placeholder
 (() => {
-  const markerId = "availability-ext-marker";
+  const markerId = "timepaste-ext-marker";
   if (document.getElementById(markerId)) return;
 
   const el = document.createElement("meta");
   el.id = markerId;
-  el.name = "availability-extension";
+  el.name = "timepaste-extension";
   el.content = "installed";
   document.documentElement.appendChild(el);
 })();

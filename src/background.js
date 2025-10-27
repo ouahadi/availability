@@ -9,7 +9,7 @@ import { GOOGLE_CLIENT_ID as CONFIG_CLIENT_ID } from "./config.js";
 const GOOGLE_CLIENT_ID = CONFIG_CLIENT_ID || null;
 chrome.runtime.onInstalled.addListener(async () => {
   // Initialize state when the extension is installed or updated
-  console.log("Availability extension installed");
+  console.log("TimePaste extension installed");
   try {
     const redirect = chrome.identity.getRedirectURL();
     console.log("OAuth redirect URI:", redirect);

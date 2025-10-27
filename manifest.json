@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Availability Extension",
+  "name": "TimePaste",
   "version": "0.0.1",
-  "description": "Starter Chrome extension boilerplate.",
+  "description": "Generate and share your calendar availability in any timezone.",
   "action": {
-    "default_title": "Availability",
+    "default_title": "TimePaste",
     "default_popup": "src/popup.html"
   },
   "options_ui": {

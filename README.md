@@ -1,6 +1,6 @@
-# Availability Chrome Extension (MV3)
+# TimePaste
 
-Minimal boilerplate with Google Calendar integration.
+Chrome extension for generating and sharing your calendar availability in any timezone. Connect your Google Calendar and easily share your available times with others, automatically converted to their timezone.
 
 ## Setup
 
