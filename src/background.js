@@ -277,8 +277,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           },
           timeBuffer: Number(prefs?.timeBuffer)||0
         };
+        
+        // Capture console logs for debug output
+        const debugLogs = [];
+        const originalLog = console.log;
+        console.log = (...args) => {
+          debugLogs.push(args.join(' '));
+          originalLog(...args);
+        };
+        
         const text = await generateAvailability(events, start, end, options);
-        sendResponse({ ok: true, text });
+        
+        // Restore original console.log
+        console.log = originalLog;
+        
+        sendResponse({ ok: true, text, debugLogs });
       } catch (e) {
         sendResponse({ ok: false, error: String(e?.message || e) });
       }

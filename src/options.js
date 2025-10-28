@@ -512,6 +512,17 @@ async function debugAvailabilitySlots() {
               output += "No available slots found.\n";
               results[scenario] = { status: "none", slots: 0 };
             }
+            
+            // Add debug logs for busy mode
+            if (mode === "busy" && response.debugLogs && response.debugLogs.length > 0) {
+              output += "\n--- DEBUG LOGS ---\n";
+              response.debugLogs.forEach(log => {
+                if (log.includes("🔴") || log.includes("Busy mode") || log.includes("Time buffer")) {
+                  output += log + "\n";
+                }
+              });
+              output += "\n";
+            }
           } else {
             output += `Error: ${response?.error || "Failed to generate availability"}\n`;
             results[scenario] = { status: "error", slots: 0 };
