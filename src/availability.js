@@ -431,13 +431,23 @@ export async function generateAvailability(events, startDate, endDate, options =
 
     if (mode === "busy") {
       const hourSlots = splitIntoHourSlots(free);
-      // adjacency: slot touches any busy edge
-      const busyEdges = new Set();
-      for (const b of mergedBusy) {
-        busyEdges.add(b.start?.getTime());
-        busyEdges.add(b.end?.getTime());
-      }
-      const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
+      // adjacency: slot is near any busy interval (within 1 hour)
+      const adjacent = hourSlots.filter(slot => {
+        for (const busy of mergedBusy) {
+          // Check if slot is within 1 hour of any busy interval
+          const slotStart = slot.start.getTime();
+          const slotEnd = slot.end.getTime();
+          const busyStart = busy.start.getTime();
+          const busyEnd = busy.end.getTime();
+          
+          // Slot is adjacent if it's within 1 hour of busy interval
+          const oneHour = 60 * 60 * 1000;
+          return (Math.abs(slotStart - busyEnd) <= oneHour) || 
+                 (Math.abs(slotEnd - busyStart) <= oneHour) ||
+                 (slotStart < busyEnd && slotEnd > busyStart); // Overlapping
+        }
+        return false;
+      });
       
       // Debug logging
       const dayStr = d.toISOString().slice(0, 10);
