@@ -330,9 +330,10 @@ export async function generateAvailability(events, startDate, endDate, options =
   const holidays = await fetchUkHolidaysSet();
   const now = new Date();
   const out = [];
-  let remainingSlots = Math.max(0, Number(maxSlots) || 0);
+  const allBusySlots = []; // Collect all busy mode slots across days
+  const maxSlotsTotal = Math.max(0, Number(maxSlots) || 0);
+  
   for (let d = startOfDayLocal(startDate); d <= endDate; d = addDays(d, 1)) {
-    if (mode === "busy" && remainingSlots <= 0) break;
     const { start: rawStart, end: rawEnd } = getDayWindow(d, context, workHours, personalHours);
     if (!rawStart || !rawEnd) continue; // skip days outside context
 
@@ -437,17 +438,58 @@ export async function generateAvailability(events, startDate, endDate, options =
         busyEdges.add(b.end?.getTime());
       }
       const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
-      const limited = adjacent.slice(0, Math.max(0, remainingSlots));
-      if (limited.length) {
-        const line = `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })} - ${limited.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
-        out.push(line);
-        remainingSlots -= limited.length;
+      
+      // Add slots to collection with date info
+      for (const slot of adjacent) {
+        allBusySlots.push({
+          date: d,
+          slot: slot,
+          dayName: d.toLocaleDateString(undefined, { weekday: "long" }),
+          dateStr: d.toLocaleDateString(undefined, { month: "long", day: "2-digit" })
+        });
       }
       continue;
     }
 
     if (free.length) out.push(formatDayAvailability(d, free, context, personalHours, showTimezone));
   }
+  
+  // Process busy mode slots across all days
+  if (mode === "busy" && allBusySlots.length > 0) {
+    // Group slots by date
+    const slotsByDate = {};
+    for (const item of allBusySlots) {
+      const dateKey = item.date.toISOString().slice(0, 10);
+      if (!slotsByDate[dateKey]) {
+        slotsByDate[dateKey] = {
+          date: item.date,
+          dayName: item.dayName,
+          dateStr: item.dateStr,
+          slots: []
+        };
+      }
+      slotsByDate[dateKey].slots.push(item.slot);
+    }
+    
+    // Take up to maxSlotsTotal slots, prioritizing earlier dates
+    const sortedDates = Object.keys(slotsByDate).sort();
+    let remainingSlots = maxSlotsTotal;
+    
+    for (const dateKey of sortedDates) {
+      if (remainingSlots <= 0) break;
+      
+      const dayData = slotsByDate[dateKey];
+      const slotsToTake = Math.min(remainingSlots, dayData.slots.length);
+      const selectedSlots = dayData.slots.slice(0, slotsToTake);
+      
+      if (selectedSlots.length > 0) {
+        const line = `${dayData.dayName}, ${dayData.dateStr} - ${selectedSlots.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
+        out.push(line);
+        remainingSlots -= selectedSlots.length;
+      }
+    }
+  }
+  
   return out.join("\n");
 }
 
