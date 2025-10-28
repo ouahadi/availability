@@ -180,7 +180,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           startHour: Number(prefs?.personalWeekendStartHour)||10,
           endHour: Number(prefs?.personalWeekendEndHour)||22
         }
-      }
+      },
+      timeBuffer: Number(prefs?.timeBuffer)||0
     };
         const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });
@@ -273,7 +274,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               startHour: Number(prefs?.personalWeekendStartHour)||10,
               endHour: Number(prefs?.personalWeekendEndHour)||22
             }
-          }
+          },
+          timeBuffer: Number(prefs?.timeBuffer)||0
         };
         const text = await generateAvailability(events, start, end, options);
         sendResponse({ ok: true, text });

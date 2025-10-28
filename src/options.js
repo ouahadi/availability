@@ -1,5 +1,7 @@
 const maxSlotsInput = document.getElementById("maxSlots");
 const showTimezoneInput = document.getElementById("showTimezone");
+const timeBufferRadios = document.querySelectorAll('input[name="timeBuffer"]');
+const timeBufferCustomInput = document.getElementById("timeBufferCustom");
 const workStartHourInput = document.getElementById("workStartHour");
 const workEndHourInput = document.getElementById("workEndHour");
 const personalWeekdayStartHourInput = document.getElementById("personalWeekdayStartHour");
@@ -38,6 +40,22 @@ async function load() {
   // Load timezone display setting (default: true)
   const showTimezone = prefs?.showTimezone !== undefined ? prefs.showTimezone : true;
   showTimezoneInput.checked = showTimezone;
+  
+  // Load time buffer setting (default: 0)
+  const timeBuffer = prefs?.timeBuffer || 0;
+  const timeBufferCustom = prefs?.timeBufferCustom;
+  
+  // Check if a custom buffer is set
+  if (timeBufferCustom && timeBufferCustom > 0) {
+    timeBufferCustomInput.value = String(timeBufferCustom);
+  } else if (timeBuffer > 0) {
+    // Select the appropriate radio button
+    timeBufferRadios.forEach(radio => {
+      if (radio.value === String(timeBuffer)) {
+        radio.checked = true;
+      }
+    });
+  }
   
   // Load work hours with defaults
   const workStartHour = prefs?.workStartHour || 9;
@@ -95,11 +113,26 @@ async function save() {
   const validatedPersonalWeekendStartHour = Math.max(0, Math.min(23, personalWeekendStartHour));
   const validatedPersonalWeekendEndHour = Math.max(0, Math.min(23, personalWeekendEndHour));
   
+  // Parse time buffer
+  const timeBufferCustom = parseInt(timeBufferCustomInput.value || '0', 10);
+  let timeBuffer = 0;
+  
+  // If custom value is set, use it
+  if (timeBufferCustom > 0) {
+    timeBuffer = timeBufferCustom;
+  } else {
+    // Otherwise, get the selected radio value
+    const selectedRadio = Array.from(timeBufferRadios).find(radio => radio.checked);
+    timeBuffer = selectedRadio ? parseInt(selectedRadio.value, 10) : 0;
+  }
+  
   const current = (await chrome.storage.sync.get(["prefs"])).prefs || {};
   const updated = { 
     ...current, 
     maxSlots,
     showTimezone: showTimezoneInput.checked,
+    timeBuffer,
+    timeBufferCustom: timeBufferCustom > 0 ? timeBufferCustom : undefined,
     workStartHour: validatedWorkStartHour,
     workEndHour: validatedWorkEndHour,
     personalWeekdayStartHour: validatedPersonalWeekdayStartHour,
@@ -504,7 +537,22 @@ async function debugAvailabilitySlots() {
   }
 }
 
-// Event listeners
+// Event listeners for time buffer
+timeBufferRadios.forEach(radio => {
+  radio.addEventListener("change", () => {
+    if (radio.checked) {
+      timeBufferCustomInput.value = ""; // Clear custom input when a radio is selected
+    }
+  });
+});
+
+timeBufferCustomInput.addEventListener("input", () => {
+  // Clear radio selection when custom value is entered
+  timeBufferRadios.forEach(radio => {
+    radio.checked = false;
+  });
+});
+
 saveBtn.addEventListener("click", save);
 refreshCalendarsBtn.addEventListener("click", renderAccounts);
 debugEventsBtn.addEventListener("click", debugCalendarEvents);

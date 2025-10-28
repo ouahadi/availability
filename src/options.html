@@ -29,6 +29,36 @@
       <div class="hint">When enabled, availability times will include your timezone offset (e.g., "17:00-18:00 GMT +2").</div>
     </div>
     <div class="section">
+      <label for="timeBuffer">Time Buffer</label>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
+        <div style="display: flex; gap: 8px;">
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer;">
+            <input type="radio" name="timeBuffer" value="5" />
+            <span>5 min</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer;">
+            <input type="radio" name="timeBuffer" value="10" />
+            <span>10 min</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer;">
+            <input type="radio" name="timeBuffer" value="15" />
+            <span>15 min</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer;">
+            <input type="radio" name="timeBuffer" value="30" />
+            <span>30 min</span>
+          </label>
+        </div>
+        <span style="color: #666;">or</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label for="timeBufferCustom" style="font-weight: 500;">Custom:</label>
+          <input id="timeBufferCustom" type="number" min="0" step="1" style="width: 80px; padding: 6px 8px;" />
+          <span style="color: #666;">min</span>
+        </div>
+      </div>
+      <div class="hint">Time buffer to add before and after meetings (default 0 minutes). The custom value takes precedence if set.</div>
+    </div>
+    <div class="section">
       <label>Work Hours</label>
       <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
         <div>

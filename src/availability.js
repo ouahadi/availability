@@ -306,11 +306,12 @@ export async function generateAvailability(events, startDate, endDate, options =
     showTimezone = true,
     fullDayEventsBusyCalendars = new Set(),
     workHours = { startHour: 9, endHour: 17 },
-    personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } }
+    personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } },
+    timeBuffer = 0
   } = options;
   
-  // Log event sources summary
   console.log(`🚀 Generating availability with ${events.length} events from ${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`);
+  console.log(`⚙️  Time buffer: ${timeBuffer} minutes`);
   
   const sourceSummary = {};
   for (const ev of events) {
@@ -402,7 +403,13 @@ export async function generateAvailability(events, startDate, endDate, options =
         continue;
       }
       
-      if (!isOnlineLocation(ev.location, ev.hangoutLink)) {
+      // Apply time buffer to all events (replaces the old 1-hour offline event buffer)
+      if (timeBuffer > 0) {
+        const bufferMs = timeBuffer * 60 * 1000;
+        s = new Date(s.getTime() - bufferMs);
+        e = new Date(e.getTime() + bufferMs);
+      } else if (!isOnlineLocation(ev.location, ev.hangoutLink)) {
+        // Fallback to old logic if no buffer is set: 1 hour for offline events
         s = new Date(s.getTime() - 60 * 60 * 1000);
         e = new Date(e.getTime() + 60 * 60 * 1000);
       }
