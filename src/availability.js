@@ -439,6 +439,16 @@ export async function generateAvailability(events, startDate, endDate, options =
       }
       const adjacent = hourSlots.filter(s => busyEdges.has(s.start.getTime()) || busyEdges.has(s.end.getTime()));
       
+      // Debug logging
+      const dayStr = d.toISOString().slice(0, 10);
+      console.log(`🔴 Busy mode - ${dayStr}: ${free.length} free intervals, ${hourSlots.length} hour slots, ${adjacent.length} adjacent slots`);
+      if (mergedBusy.length > 0) {
+        console.log(`   Busy intervals: ${mergedBusy.map(b => `${b.start.toLocaleTimeString()}-${b.end.toLocaleTimeString()}`).join(', ')}`);
+      }
+      if (adjacent.length > 0) {
+        console.log(`   Adjacent slots: ${adjacent.map(s => `${s.start.toLocaleTimeString()}-${s.end.toLocaleTimeString()}`).join(', ')}`);
+      }
+      
       // Add slots to collection with date info
       for (const slot of adjacent) {
         allBusySlots.push({
