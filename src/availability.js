@@ -465,38 +465,48 @@ export async function generateAvailability(events, startDate, endDate, options =
   }
   
   // Process busy mode slots across all days
-  if (mode === "busy" && allBusySlots.length > 0) {
-    // Group slots by date
-    const slotsByDate = {};
-    for (const item of allBusySlots) {
-      const dateKey = item.date.toISOString().slice(0, 10);
-      if (!slotsByDate[dateKey]) {
-        slotsByDate[dateKey] = {
-          date: item.date,
-          dayName: item.dayName,
-          dateStr: item.dateStr,
-          slots: []
-        };
-      }
-      slotsByDate[dateKey].slots.push(item.slot);
-    }
+  if (mode === "busy") {
+    console.log(`🔴 Busy mode processing: ${allBusySlots.length} total slots collected`);
     
-    // Take up to maxSlotsTotal slots, prioritizing earlier dates
-    const sortedDates = Object.keys(slotsByDate).sort();
-    let remainingSlots = maxSlotsTotal;
-    
-    for (const dateKey of sortedDates) {
-      if (remainingSlots <= 0) break;
-      
-      const dayData = slotsByDate[dateKey];
-      const slotsToTake = Math.min(remainingSlots, dayData.slots.length);
-      const selectedSlots = dayData.slots.slice(0, slotsToTake);
-      
-      if (selectedSlots.length > 0) {
-        const line = `${dayData.dayName}, ${dayData.dateStr} - ${selectedSlots.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
-        out.push(line);
-        remainingSlots -= selectedSlots.length;
+    if (allBusySlots.length > 0) {
+      // Group slots by date
+      const slotsByDate = {};
+      for (const item of allBusySlots) {
+        const dateKey = item.date.toISOString().slice(0, 10);
+        if (!slotsByDate[dateKey]) {
+          slotsByDate[dateKey] = {
+            date: item.date,
+            dayName: item.dayName,
+            dateStr: item.dateStr,
+            slots: []
+          };
+        }
+        slotsByDate[dateKey].slots.push(item.slot);
       }
+      
+      console.log(`🔴 Slots by date:`, Object.keys(slotsByDate).map(date => `${date}: ${slotsByDate[date].slots.length} slots`));
+      
+      // Take up to maxSlotsTotal slots, prioritizing earlier dates
+      const sortedDates = Object.keys(slotsByDate).sort();
+      let remainingSlots = maxSlotsTotal;
+      
+      for (const dateKey of sortedDates) {
+        if (remainingSlots <= 0) break;
+        
+        const dayData = slotsByDate[dateKey];
+        const slotsToTake = Math.min(remainingSlots, dayData.slots.length);
+        const selectedSlots = dayData.slots.slice(0, slotsToTake);
+        
+        console.log(`🔴 Processing ${dateKey}: taking ${slotsToTake} of ${dayData.slots.length} slots, ${remainingSlots} remaining`);
+        
+        if (selectedSlots.length > 0) {
+          const line = `${dayData.dayName}, ${dayData.dateStr} - ${selectedSlots.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
+          out.push(line);
+          remainingSlots -= selectedSlots.length;
+        }
+      }
+    } else {
+      console.log(`🔴 No busy slots found across all days`);
     }
   }
   
