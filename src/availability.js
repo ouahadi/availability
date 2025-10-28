@@ -496,15 +496,22 @@ export async function generateAvailability(events, startDate, endDate, options =
       
       console.log(`🔴 Slots by date:`, Object.keys(slotsByDate).map(date => `${date}: ${slotsByDate[date].slots.length} slots`));
       
-      // Take up to maxSlotsTotal slots, prioritizing earlier dates
+      // Distribute maxSlotsTotal across multiple days (aim for 2-3 days)
       const sortedDates = Object.keys(slotsByDate).sort();
+      const maxDays = Math.min(3, sortedDates.length); // Use up to 3 days
+      const slotsPerDay = Math.ceil(maxSlotsTotal / maxDays); // Distribute slots across days
+      
+      console.log(`🔴 Distribution strategy: ${maxSlotsTotal} slots across ${maxDays} days, ~${slotsPerDay} slots per day`);
+      
       let remainingSlots = maxSlotsTotal;
       
-      for (const dateKey of sortedDates) {
-        if (remainingSlots <= 0) break;
-        
+      for (let i = 0; i < Math.min(maxDays, sortedDates.length) && remainingSlots > 0; i++) {
+        const dateKey = sortedDates[i];
         const dayData = slotsByDate[dateKey];
-        const slotsToTake = Math.min(remainingSlots, dayData.slots.length);
+        
+        // Calculate how many slots to take from this day
+        // For the last day, take all remaining slots
+        const slotsToTake = (i === maxDays - 1) ? remainingSlots : Math.min(remainingSlots, slotsPerDay, dayData.slots.length);
         const selectedSlots = dayData.slots.slice(0, slotsToTake);
         
         console.log(`🔴 Processing ${dateKey}: taking ${slotsToTake} of ${dayData.slots.length} slots, ${remainingSlots} remaining`);
