@@ -5,12 +5,76 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TimePaste Options</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
-      .section { margin-bottom: 20px; }
+      body { 
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
+        margin: 24px; 
+        background: #ffffff;
+        color: #1f2937;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #000000;
+          color: #f9fafb;
+        }
+      }
+      .section { 
+        margin-bottom: 20px; 
+      }
       label { display: block; margin-bottom: 8px; font-weight: 600; }
-      input[type="text"], input[type="number"] { width: 220px; padding: 6px 8px; }
-      .hint { font-size: 12px; color: #555; margin-top: 6px; }
+      input[type="text"], input[type="number"], input[type="time"] { 
+        width: 220px; 
+        padding: 6px 8px; 
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        color: #1f2937;
+        border-radius: 4px;
+      }
+      @media (prefers-color-scheme: dark) {
+        input[type="text"], input[type="number"], input[type="time"] {
+          background: #1a1a1a;
+          border: 1px solid #333333;
+          color: #f9fafb;
+        }
+      }
+      .hint { 
+        font-size: 12px; 
+        color: #6b7280; 
+        margin-top: 6px; 
+      }
+      @media (prefers-color-scheme: dark) {
+        .hint {
+          color: #9ca3af;
+        }
+      }
       button { padding: 6px 10px; }
+      h1, h2 {
+        color: #1f2937;
+      }
+      @media (prefers-color-scheme: dark) {
+        h1, h2 {
+          color: #f9fafb;
+        }
+      }
+      .muted-text {
+        color: #6b7280;
+      }
+      @media (prefers-color-scheme: dark) {
+        .muted-text {
+          color: #9ca3af;
+        }
+      }
+      #debug-output {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #1f2937;
+      }
+      @media (prefers-color-scheme: dark) {
+        #debug-output {
+          background: #1a1a1a;
+          border: 1px solid #333333;
+          color: #f9fafb;
+        }
+      }
     </style>
   </head>
   <body>
@@ -49,11 +113,11 @@
             <span>30 min</span>
           </label>
         </div>
-        <span style="color: #666;">or</span>
+        <span class="muted-text">or</span>
         <div style="display: flex; align-items: center; gap: 8px;">
           <label for="timeBufferCustom" style="font-weight: 500;">Custom:</label>
           <input id="timeBufferCustom" type="number" min="0" step="1" style="width: 80px; padding: 6px 8px;" />
-          <span style="color: #666;">min</span>
+          <span class="muted-text">min</span>
         </div>
       </div>
       <div class="hint">Time buffer to add before and after meetings (default 0 minutes). The custom value takes precedence if set.</div>
@@ -77,13 +141,13 @@
       <label>Out of Office / Non-Office Hours</label>
       <div style="margin-top: 8px;">
         <div style="margin-bottom: 12px;">
-          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; color: #333;">Weekdays (Mon-Fri)</label>
+          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Weekdays (Mon-Fri)</label>
           <div style="display: flex; align-items: center; gap: 12px;">
             <div>
               <label for="personalWeekdayStartHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">Start Time</label>
               <input id="personalWeekdayStartHour" type="time" style="width: 100px; padding: 6px 8px;" />
             </div>
-            <div style="color: #666; font-size: 14px; margin-top: 20px;">to</div>
+            <div class="muted-text" style="font-size: 14px; margin-top: 20px;">to</div>
             <div>
               <label for="personalWeekdayEndHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">End Time</label>
               <input id="personalWeekdayEndHour" type="time" style="width: 100px; padding: 6px 8px;" />
@@ -91,13 +155,13 @@
           </div>
         </div>
         <div>
-          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; color: #333;">Weekends (Sat-Sun)</label>
+          <label style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;">Weekends (Sat-Sun)</label>
           <div style="display: flex; align-items: center; gap: 12px;">
             <div>
               <label for="personalWeekendStartHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">Start Time</label>
               <input id="personalWeekendStartHour" type="time" style="width: 100px; padding: 6px 8px;" />
             </div>
-            <div style="color: #666; font-size: 14px; margin-top: 20px;">to</div>
+            <div class="muted-text" style="font-size: 14px; margin-top: 20px;">to</div>
             <div>
               <label for="personalWeekendEndHour" style="font-size: 12px; font-weight: 500; margin-bottom: 4px; display: block;">End Time</label>
               <input id="personalWeekendEndHour" type="time" style="width: 100px; padding: 6px 8px;" />
@@ -120,8 +184,8 @@
     </div>
     
     <!-- Debug Section -->
-    <div class="section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #eee;">
-      <h2 style="margin-bottom: 16px; color: #333;">Debug Information</h2>
+    <div class="section" style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+      <h2 style="margin-bottom: 16px;">Debug Information</h2>
       
       <div style="margin-bottom: 16px;">
         <button id="debug-events" style="padding:8px 12px; margin-right:8px; background:#007bff; color:white; border:none; border-radius:4px;">Show Calendar Events</button>
@@ -129,7 +193,7 @@
         <button id="debug-clear" style="padding:8px 12px; background:#dc3545; color:white; border:none; border-radius:4px;">Clear Debug</button>
       </div>
       
-      <div id="debug-output" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:4px; padding:16px; min-height:200px; font-family:monospace; font-size:12px; white-space:pre-wrap; overflow-y:auto; max-height:400px; display:none;"></div>
+      <div id="debug-output" style="border-radius:4px; padding:16px; min-height:200px; font-family:monospace; font-size:12px; white-space:pre-wrap; overflow-y:auto; max-height:400px; display:none;"></div>
     </div>
     
     <button id="save">Save</button>
