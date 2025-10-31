@@ -59,7 +59,7 @@
         }
       }
       .button {
-        background: linear-gradient(45deg, #ff6b9d, #c44569);
+        background: #0A91A4;
         border: none;
         color: white;
         padding: 12px 20px;
@@ -73,14 +73,10 @@
       }
       .button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-      }
-      @media (prefers-color-scheme: dark) {
-        .button:hover {
-          box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
-        }
+        box-shadow: 0 4px 12px rgba(10, 145, 164, 0.3);
       }
       .button:active {
+        background: #098697;
         transform: translateY(0);
       }
       .button.secondary {
@@ -418,7 +414,7 @@
         <button id="google-auth" class="button">Connect Google Calendar</button>
         <div id="accounts-section" class="accounts-section hidden">
           <div id="accounts-list" class="accounts-list"></div>
-          <button id="add-account" class="button secondary" style="margin-top: 8px; font-size: 12px;">+ Add Account</button>
+          <button id="add-account" class="button" style="margin-top: 8px; font-size: 12px;">+ Add Account</button>
         </div>
         <div id="status" class="status"></div>
       </div>
