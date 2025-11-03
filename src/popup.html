@@ -80,15 +80,18 @@
       }
       #add-account.button,
       #gen-availability.button {
-        background: #9F07D7;
+        background: #BC19F8;
+        height: 40px;
+        font-size: 14px;
+        padding: 12px 20px;
       }
       #add-account.button:hover,
       #gen-availability.button:hover {
-        box-shadow: 0 4px 12px rgba(159, 7, 215, 0.3);
+        box-shadow: 0 4px 12px rgba(188, 25, 248, 0.3);
       }
       #add-account.button:active,
       #gen-availability.button:active {
-        background: #8A06B8;
+        background: #A015D9;
       }
       #google-auth {
         margin: 16px;
@@ -128,15 +131,14 @@
         min-height: 16px;
       }
       .availability-section {
-        background: #f9fafb;
-        border-radius: 12px;
-        padding: 16px;
-        border: 1px solid #e5e7eb;
+        padding: 0;
+        background: transparent;
+        border: none;
       }
       @media (prefers-color-scheme: dark) {
         .availability-section {
-          background: #111111;
-          border: 1px solid #333333;
+          background: transparent;
+          border: none;
         }
       }
       .section-title {
@@ -520,7 +522,7 @@
         <button id="google-auth" class="button">Connect Google Calendar</button>
         <div id="accounts-section" class="accounts-section hidden">
           <div id="accounts-list" class="accounts-list"></div>
-          <button id="add-account" class="button" style="margin-top: 8px; font-size: 12px;">+ Add Account</button>
+          <button id="add-account" class="button" style="margin-top: 8px;">+ Add Account</button>
         </div>
         <div id="status" class="status"></div>
       </div>

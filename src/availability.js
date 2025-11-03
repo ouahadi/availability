@@ -106,7 +106,7 @@ function formatDayAvailability(date, freeIntervals, context, personalHours, show
   
   // For personal context, use special phrasing patterns
   if (context === "personal") {
-    return formatPersonalAvailability(dateStr, freeIntervals, personalHours, showTimezone);
+    return formatPersonalAvailability(date, dateStr, freeIntervals, personalHours, showTimezone);
   }
   
   // For work context, use existing logic
@@ -125,38 +125,101 @@ function formatDayAvailability(date, freeIntervals, context, personalHours, show
   return `${dayName}, ${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
 }
 
-function formatPersonalAvailability(dateStr, freeIntervals, personalHours, showTimezone = true) {
+function formatPersonalAvailability(date, dateStr, freeIntervals, personalHours, showTimezone = true) {
+  // Determine if weekday or weekend
+  const dow = date.getDay(); // 0 Sun, 6 Sat
+  const isWeekend = dow === 0 || dow === 6;
+  
   // Define time periods
   const morning = { start: 10, end: 13 }; // 10 AM - 1 PM
   const afternoon = { start: 13, end: 17 }; // 1 PM - 5 PM
-  const evening = { start: personalHours?.weekdays?.startHour || 18, end: personalHours?.weekdays?.endHour || 22 };
+  const evening = isWeekend 
+    ? { start: personalHours?.weekends?.startHour || 10, end: personalHours?.weekends?.endHour || 22 }
+    : { start: personalHours?.weekdays?.startHour || 18, end: personalHours?.weekdays?.endHour || 22 };
   
-  // Check if we have full evening availability (18-22 on weekdays, or weekend evening)
-  const fullEvening = checkFullPeriod(freeIntervals, evening.start, evening.end);
+  // Check if we have full evening availability
+  const fullEvening = checkFullPeriod(freeIntervals, evening.start, evening.end, date);
   
   // Check for partial evening (after a specific time)
-  const partialEvening = checkPartialEvening(freeIntervals, evening.start, evening.end);
+  const partialEvening = checkPartialEvening(freeIntervals, evening.start, evening.end, date);
   
   // Check for morning availability
-  const fullMorning = checkFullPeriod(freeIntervals, morning.start, morning.end);
+  const fullMorning = checkFullPeriod(freeIntervals, morning.start, morning.end, date);
   
   // Check for afternoon availability
-  const fullAfternoon = checkFullPeriod(freeIntervals, afternoon.start, afternoon.end);
+  const fullAfternoon = checkFullPeriod(freeIntervals, afternoon.start, afternoon.end, date);
   
-  // Check for full day (10 AM - 10 PM)
-  const fullDay = checkFullPeriod(freeIntervals, 10, 22);
+  // Check for full day
+  const fullDayStart = isWeekend ? 10 : 10;
+  const fullDayEnd = isWeekend ? 22 : 22;
+  const fullDay = checkFullPeriod(freeIntervals, fullDayStart, fullDayEnd, date);
+  
+  // Find the earliest availability start time
+  const earliestStart = freeIntervals.length > 0 
+    ? Math.min(...freeIntervals.map(i => i.start.getHours() * 60 + i.start.getMinutes()))
+    : null;
+  
+  // Check if availability is within evening period (even if not full)
+  const hasEveningAvailability = checkEveningAvailability(freeIntervals, evening.start, evening.end, date);
+  
+  // Check if availability spans both afternoon and evening
+  const spansAfternoonAndEvening = checkSpansAfternoonAndEvening(freeIntervals, afternoon, evening, date);
   
   // Determine the best phrasing
   if (fullDay) {
     return `${dateStr}, anytime`;
   }
   
-  if (fullEvening && !fullMorning && !fullAfternoon) {
+  // Check if availability starts in afternoon and extends into evening
+  if (earliestStart !== null && spansAfternoonAndEvening) {
+    const startHour = Math.floor(earliestStart / 60);
+    const startMin = earliestStart % 60;
+    // Only format as "afternoon after X or evening" if it starts after the afternoon start time
+    if (startHour > afternoon.start || (startHour === afternoon.start && startMin > 0)) {
+      const timeStr = formatTimeForDisplay(startHour, startMin, showTimezone);
+      return `${dateStr}, afternoon after ${timeStr} or evening`;
+    }
+    // If it starts exactly at afternoon start, just say "afternoon or evening"
+    if (startHour === afternoon.start && startMin === 0) {
+      return `${dateStr}, afternoon or evening`;
+    }
+  }
+  
+  // If we have evening availability (full or partial) and no morning/afternoon
+  if (hasEveningAvailability && !fullMorning && !fullAfternoon) {
+    // Check if it's full evening
+    if (fullEvening) {
+      return `${dateStr}, evening`;
+    }
+    // Otherwise, check if it starts later than the defined evening start
+    if (earliestStart !== null && earliestStart >= evening.start * 60) {
+      const startHour = Math.floor(earliestStart / 60);
+      const startMin = earliestStart % 60;
+      if (startHour > evening.start || (startHour === evening.start && startMin > 0)) {
+        const timeStr = formatTimeForDisplay(startHour, startMin, showTimezone);
+        return `${dateStr}, evening after ${timeStr}`;
+      }
+    }
+    // Default to "evening" if it's within evening period
     return `${dateStr}, evening`;
   }
   
+  // Check if availability starts later than defined periods (but doesn't span to evening)
+  if (earliestStart !== null && !hasEveningAvailability) {
+    // If starts in afternoon but after the defined afternoon start
+    if (earliestStart >= afternoon.start * 60 && earliestStart < evening.start * 60) {
+      const startHour = Math.floor(earliestStart / 60);
+      const startMin = earliestStart % 60;
+      if (startHour > afternoon.start || (startHour === afternoon.start && startMin > 0)) {
+        const timeStr = formatTimeForDisplay(startHour, startMin, showTimezone);
+        return `${dateStr}, afternoon after ${timeStr}`;
+      }
+    }
+  }
+  
   if (partialEvening && !fullMorning && !fullAfternoon) {
-    return `${dateStr}, after ${fmtTime(new Date(0, 0, 0, partialEvening, 0), showTimezone)}`;
+    const timeStr = formatTimeForDisplay(partialEvening, 0, showTimezone);
+    return `${dateStr}, after ${timeStr}`;
   }
   
   if (fullMorning && fullAfternoon && !fullEvening) {
@@ -183,33 +246,88 @@ function formatPersonalAvailability(dateStr, freeIntervals, personalHours, showT
   return `${dateStr} - ${freeIntervals.map(s => `${fmtTime(s.start, showTimezone)}-${fmtTime(s.end, showTimezone)}`).join(" and ")}`;
 }
 
-function checkFullPeriod(freeIntervals, startHour, endHour) {
+function formatTimeForDisplay(hours, minutes, showTimezone) {
+  const date = new Date(0, 0, 0, hours, minutes);
+  return date.toLocaleTimeString([], { hour: "numeric", minute: minutes > 0 ? "2-digit" : undefined, hour12: true });
+}
+
+function checkFullPeriod(freeIntervals, startHour, endHour, date) {
   // Check if we have continuous availability for the entire period
-  const periodStartMs = startHour * 60 * 60 * 1000; // Convert to milliseconds
-  const periodEndMs = endHour * 60 * 60 * 1000;
+  // Use the date to create proper timestamps
+  const baseDate = date || new Date();
+  const periodStart = new Date(baseDate);
+  periodStart.setHours(startHour, 0, 0, 0);
+  const periodEnd = new Date(baseDate);
+  periodEnd.setHours(endHour, 0, 0, 0);
   
   // Find intervals that cover this period
   const coveringIntervals = freeIntervals.filter(interval => {
-    const intervalStartMs = interval.start.getHours() * 60 * 60 * 1000 + interval.start.getMinutes() * 60 * 1000;
-    const intervalEndMs = interval.end.getHours() * 60 * 60 * 1000 + interval.end.getMinutes() * 60 * 1000;
-    return intervalStartMs <= periodStartMs && intervalEndMs >= periodEndMs;
+    // Check if interval starts at or before period start and ends at or after period end
+    return interval.start.getTime() <= periodStart.getTime() && interval.end.getTime() >= periodEnd.getTime();
   });
   
   return coveringIntervals.length > 0;
 }
 
-function checkPartialEvening(freeIntervals, eveningStartHour, eveningEndHour) {
+function checkEveningAvailability(freeIntervals, eveningStartHour, eveningEndHour, date) {
+  // Check if any availability falls within the evening period
+  const baseDate = date || new Date();
+  const eveningStart = new Date(baseDate);
+  eveningStart.setHours(eveningStartHour, 0, 0, 0);
+  const eveningEnd = new Date(baseDate);
+  eveningEnd.setHours(eveningEndHour, 0, 0, 0);
+  
+  return freeIntervals.some(interval => {
+    // Check if interval overlaps with evening period
+    return interval.start.getTime() < eveningEnd.getTime() && 
+           interval.end.getTime() > eveningStart.getTime();
+  });
+}
+
+function checkSpansAfternoonAndEvening(freeIntervals, afternoon, evening, date) {
+  // Check if availability spans from afternoon into evening
+  const baseDate = date || new Date();
+  const afternoonStart = new Date(baseDate);
+  afternoonStart.setHours(afternoon.start, 0, 0, 0);
+  const afternoonEnd = new Date(baseDate);
+  afternoonEnd.setHours(afternoon.end, 0, 0, 0);
+  const eveningStart = new Date(baseDate);
+  eveningStart.setHours(evening.start, 0, 0, 0);
+  const eveningEnd = new Date(baseDate);
+  eveningEnd.setHours(evening.end, 0, 0, 0);
+  
+  return freeIntervals.some(interval => {
+    // Check if interval starts in afternoon period (or before) and extends into evening
+    const startsInAfternoon = interval.start.getTime() <= afternoonEnd.getTime();
+    const extendsIntoEvening = interval.end.getTime() >= eveningStart.getTime();
+    // Also check if it spans across the gap between afternoon and evening
+    return startsInAfternoon && extendsIntoEvening;
+  });
+}
+
+function checkPartialEvening(freeIntervals, eveningStartHour, eveningEndHour, date) {
   // Check if we have evening availability starting after the normal evening start
+  const baseDate = date || new Date();
+  const eveningStart = new Date(baseDate);
+  eveningStart.setHours(eveningStartHour, 0, 0, 0);
+  const eveningEnd = new Date(baseDate);
+  eveningEnd.setHours(eveningEndHour, 0, 0, 0);
+  
   const eveningIntervals = freeIntervals.filter(interval => {
-    const intervalStart = interval.start.getHours();
-    const intervalEnd = interval.end.getHours();
-    return intervalStart >= eveningStartHour && intervalEnd >= eveningStartHour + 1;
+    // Check if interval overlaps with evening period
+    return interval.start.getTime() >= eveningStart.getTime() && 
+           interval.start.getTime() < eveningEnd.getTime() &&
+           interval.end.getTime() >= eveningStart.getTime();
   });
   
   if (eveningIntervals.length > 0) {
     // Find the earliest evening start time
-    const earliestStart = Math.min(...eveningIntervals.map(interval => interval.start.getHours()));
-    if (earliestStart > eveningStartHour) {
+    const earliestInterval = eveningIntervals.reduce((earliest, interval) => 
+      interval.start.getTime() < earliest.start.getTime() ? interval : earliest
+    );
+    const earliestStart = earliestInterval.start.getHours();
+    if (earliestStart > eveningStartHour || 
+        (earliestStart === eveningStartHour && earliestInterval.start.getMinutes() > 0)) {
       return earliestStart;
     }
   }
@@ -433,25 +551,25 @@ export async function generateAvailability(events, startDate, endDate, options =
     }
     const mergedBusy = mergeIntervals(busy);
     let free = subtractBusyFromWindow(windowStart, windowEnd, mergedBusy);
-    // Snap to slot duration increments
-    const slotDurationMs = slotDuration * 60 * 1000;
-    free = free.map(({ start, end }) => {
-      const s = new Date(start);
-      // Round start down to nearest slot duration boundary
-      const startMinutes = s.getMinutes() + (s.getHours() * 60);
-      const roundedMinutes = Math.floor(startMinutes / slotDuration) * slotDuration;
-      s.setHours(Math.floor(roundedMinutes / 60), roundedMinutes % 60, 0, 0);
-      
-      const e = new Date(end);
-      // Round end down to nearest slot duration boundary
-      const endMinutes = e.getMinutes() + (e.getHours() * 60);
-      const roundedEndMinutes = Math.floor(endMinutes / slotDuration) * slotDuration;
-      e.setHours(Math.floor(roundedEndMinutes / 60), roundedEndMinutes % 60, 0, 0);
-      
-      return { start: s, end: e };
-    }).filter(({ start, end }) => (end - start) >= slotDurationMs);
 
     if (mode === "busy") {
+      // Snap to slot duration increments for busy mode only
+      const slotDurationMs = slotDuration * 60 * 1000;
+      free = free.map(({ start, end }) => {
+        const s = new Date(start);
+        // Round start down to nearest slot duration boundary
+        const startMinutes = s.getMinutes() + (s.getHours() * 60);
+        const roundedMinutes = Math.floor(startMinutes / slotDuration) * slotDuration;
+        s.setHours(Math.floor(roundedMinutes / 60), roundedMinutes % 60, 0, 0);
+        
+        const e = new Date(end);
+        // Round end down to nearest slot duration boundary
+        const endMinutes = e.getMinutes() + (e.getHours() * 60);
+        const roundedEndMinutes = Math.floor(endMinutes / slotDuration) * slotDuration;
+        e.setHours(Math.floor(roundedEndMinutes / 60), roundedEndMinutes % 60, 0, 0);
+        
+        return { start: s, end: e };
+      }).filter(({ start, end }) => (end - start) >= slotDurationMs);
       const hourSlots = splitIntoSlots(free, slotDuration);
       // adjacency: slot is near any busy interval (within 1 hour)
       const adjacent = hourSlots.filter(slot => {
