@@ -18,7 +18,7 @@ const modeBusy = document.getElementById("mode-busy");
 const ctxPersonal = document.getElementById("ctx-personal");
 const ctxWork = document.getElementById("ctx-work");
 const modeSwitch = document.getElementById("mode-switch");
-const contextSegment = document.getElementById("context-segment");
+const workingHoursCheckbox = document.getElementById("working-hours-checkbox");
 const targetTimezoneSelect = document.getElementById("target-timezone");
 const durationTags = document.getElementById("duration-tags");
 
@@ -217,13 +217,12 @@ async function loadPrefs() {
     const { mode = "approachable", context = "work", slotDuration = null } = res.prefs || {};
     modeApproachable.checked = mode === "approachable";
     modeBusy.checked = mode === "busy";
+    // Update checkbox based on context (checked = work, unchecked = personal)
+    workingHoursCheckbox.checked = context !== "personal";
     ctxPersonal.checked = context === "personal";
     ctxWork.checked = context !== "personal";
     // Reflect on custom controls
     modeSwitch.classList.toggle("on", mode === "busy");
-    for (const btn of contextSegment.querySelectorAll("button")) {
-      btn.classList.toggle("active", btn.dataset.value === context);
-    }
     // Set default duration based on context if not saved
     let durationMinutes = slotDuration;
     if (!durationMinutes) {
@@ -252,8 +251,11 @@ function getActiveDuration() {
 
 async function savePrefs() {
   const mode = modeBusy.checked ? "busy" : "approachable";
-  const context = ctxPersonal.checked ? "personal" : "work";
+  const context = workingHoursCheckbox.checked ? "work" : "personal";
   const slotDuration = getActiveDuration();
+  // Update radio buttons to match checkbox
+  ctxPersonal.checked = context === "personal";
+  ctxWork.checked = context !== "personal";
   await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context, slotDuration } });
 }
 
@@ -482,17 +484,12 @@ modeSwitch.addEventListener("click", async () => {
   await autoGenerateAvailability();
 });
 
-contextSegment.addEventListener("click", async (e) => {
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  for (const b of contextSegment.querySelectorAll("button")) b.classList.remove("active");
-  btn.classList.add("active");
-  const val = btn.dataset.value;
-  ctxPersonal.checked = val === "personal";
-  ctxWork.checked = val !== "personal";
+// Working hours checkbox handler
+workingHoursCheckbox.addEventListener("change", async () => {
+  const isWork = workingHoursCheckbox.checked;
   
   // Update duration default when context changes
-  const defaultDuration = val === "work" ? 30 : 180;
+  const defaultDuration = isWork ? 30 : 180;
   updateDurationTags(defaultDuration);
   
   await savePrefs();

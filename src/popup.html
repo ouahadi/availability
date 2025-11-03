@@ -78,6 +78,18 @@
         width: 100%;
         margin-bottom: 8px;
       }
+      #add-account.button,
+      #gen-availability.button {
+        background: #9F07D7;
+      }
+      #add-account.button:hover,
+      #gen-availability.button:hover {
+        box-shadow: 0 4px 12px rgba(159, 7, 215, 0.3);
+      }
+      #add-account.button:active,
+      #gen-availability.button:active {
+        background: #8A06B8;
+      }
       #google-auth {
         margin: 16px;
         margin-bottom: 8px;
@@ -311,6 +323,39 @@
           font-weight: 700;
         }
       }
+      #working-hours-checkbox {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        margin: 0;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        border: 2px solid #d1d5db;
+        border-radius: 4px;
+        background: transparent;
+        position: relative;
+      }
+      @media (prefers-color-scheme: dark) {
+        #working-hours-checkbox {
+          border-color: #6b7280;
+        }
+      }
+      #working-hours-checkbox:checked {
+        background: #81B703;
+        border-color: #81B703;
+      }
+      #working-hours-checkbox:checked::after {
+        content: '✓';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        line-height: 1;
+      }
       .availability-label {
         font-size: 14px;
         font-weight: 500;
@@ -483,12 +528,20 @@
       <div class="availability-section hidden" id="availability-section">
         <div style="margin-bottom:12px;">
           <div class="availability-label">Availability Settings</div>
-          <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
-            <span>All slots</span>
-            <div id="mode-switch" class="switch"><span class="knob"></span></div>
-            <span>Busy</span>
-            <input type="radio" name="mode" value="approachable" id="mode-approachable" class="visually-hidden" checked />
-            <input type="radio" name="mode" value="busy" id="mode-busy" class="visually-hidden" />
+          <div style="display:flex; align-items:center; gap:15px; flex-wrap: wrap;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span>All slots</span>
+              <div id="mode-switch" class="switch"><span class="knob"></span></div>
+              <span>Busy</span>
+              <input type="radio" name="mode" value="approachable" id="mode-approachable" class="visually-hidden" checked />
+              <input type="radio" name="mode" value="busy" id="mode-busy" class="visually-hidden" />
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+              <input type="checkbox" id="working-hours-checkbox" checked style="cursor:pointer; margin:0;" />
+              <span>Working hours</span>
+            </label>
+            <input type="radio" name="context" value="personal" id="ctx-personal" class="visually-hidden" />
+            <input type="radio" name="context" value="work" id="ctx-work" class="visually-hidden" checked />
           </div>
           <div id="duration-tags" style="display:flex; gap:6px; margin-top:8px; flex-wrap: wrap;">
             <button type="button" class="duration-tag" data-minutes="15" data-color-active="#0A91A4" data-color-inactive="#BBEEF5">15 min</button>
@@ -496,15 +549,6 @@
             <button type="button" class="duration-tag" data-minutes="60" data-color-active="#81B703" data-color-inactive="#DEFF90">1 h</button>
             <button type="button" class="duration-tag" data-minutes="180" data-color-active="#F11B85" data-color-inactive="#EECEDE">3 h</button>
           </div>
-        </div>
-        <div style="margin-bottom:12px;">
-          <div class="availability-label">Context</div>
-          <div class="segmented" id="context-segment">
-            <button type="button" data-value="personal">Personal</button>
-            <button type="button" data-value="work" class="active">Work</button>
-          </div>
-          <input type="radio" name="context" value="personal" id="ctx-personal" class="visually-hidden" />
-          <input type="radio" name="context" value="work" id="ctx-work" class="visually-hidden" checked />
         </div>
         <div style="margin-bottom:12px;">
           <div class="availability-label">Target Timezone</div>
