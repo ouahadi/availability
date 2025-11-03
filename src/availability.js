@@ -298,6 +298,18 @@ function splitIntoHourSlots(freeIntervals) {
   return slots;
 }
 
+function splitIntoSlots(freeIntervals, slotDurationMinutes) {
+  const slots = [];
+  const slotDurationMs = slotDurationMinutes * 60 * 1000;
+  for (const { start, end } of freeIntervals) {
+    for (let t = new Date(start); t < end; t = new Date(t.getTime() + slotDurationMs)) {
+      const nxt = new Date(t.getTime() + slotDurationMs);
+      if (nxt <= end) slots.push({ start: new Date(t), end: nxt });
+    }
+  }
+  return slots;
+}
+
 export async function generateAvailability(events, startDate, endDate, options = {}) {
   const { 
     context = "work", 
@@ -307,7 +319,8 @@ export async function generateAvailability(events, startDate, endDate, options =
     fullDayEventsBusyCalendars = new Set(),
     workHours = { startHour: 9, endHour: 17 },
     personalHours = { weekdays: { startHour: 18, endHour: 22 }, weekends: { startHour: 10, endHour: 22 } },
-    timeBuffer = 0
+    timeBuffer = 0,
+    slotDuration = 60
   } = options;
   
   console.log(`🚀 Generating availability with ${events.length} events from ${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`);
@@ -420,17 +433,26 @@ export async function generateAvailability(events, startDate, endDate, options =
     }
     const mergedBusy = mergeIntervals(busy);
     let free = subtractBusyFromWindow(windowStart, windowEnd, mergedBusy);
-    // Snap to 1h increments
+    // Snap to slot duration increments
+    const slotDurationMs = slotDuration * 60 * 1000;
     free = free.map(({ start, end }) => {
       const s = new Date(start);
-      s.setMinutes(0, 0, 0);
+      // Round start down to nearest slot duration boundary
+      const startMinutes = s.getMinutes() + (s.getHours() * 60);
+      const roundedMinutes = Math.floor(startMinutes / slotDuration) * slotDuration;
+      s.setHours(Math.floor(roundedMinutes / 60), roundedMinutes % 60, 0, 0);
+      
       const e = new Date(end);
-      if (e.getMinutes() !== 0) e.setHours(e.getHours(), 0, 0, 0);
+      // Round end down to nearest slot duration boundary
+      const endMinutes = e.getMinutes() + (e.getHours() * 60);
+      const roundedEndMinutes = Math.floor(endMinutes / slotDuration) * slotDuration;
+      e.setHours(Math.floor(roundedEndMinutes / 60), roundedEndMinutes % 60, 0, 0);
+      
       return { start: s, end: e };
-    }).filter(({ start, end }) => (end - start) >= 60 * 60 * 1000);
+    }).filter(({ start, end }) => (end - start) >= slotDurationMs);
 
     if (mode === "busy") {
-      const hourSlots = splitIntoHourSlots(free);
+      const hourSlots = splitIntoSlots(free, slotDuration);
       // adjacency: slot is near any busy interval (within 1 hour)
       const adjacent = hourSlots.filter(slot => {
         for (const busy of mergedBusy) {

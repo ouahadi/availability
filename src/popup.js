@@ -20,6 +20,7 @@ const ctxWork = document.getElementById("ctx-work");
 const modeSwitch = document.getElementById("mode-switch");
 const contextSegment = document.getElementById("context-segment");
 const targetTimezoneSelect = document.getElementById("target-timezone");
+const durationTags = document.getElementById("duration-tags");
 
 // Check if already authenticated on load
 async function checkAuthStatus() {
@@ -78,11 +79,19 @@ async function renderAccounts() {
       const left = document.createElement("div");
       left.className = "left";
       
-      const accountText = document.createElement("span");
-      accountText.textContent = account.email;
-      accountText.style.fontSize = "13px";
-      accountText.style.fontWeight = account.active ? "600" : "400";
-      accountText.style.opacity = account.active ? "1" : "0.6";
+      // Profile picture
+      const profilePic = document.createElement("img");
+      profilePic.className = "profile-picture";
+      profilePic.src = account.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(account.name || account.email)}&background=0A91A4&color=fff&size=32`;
+      profilePic.alt = account.name || account.email;
+      profilePic.style.opacity = account.active ? "1" : "0.6";
+      
+      // Account name
+      const accountName = document.createElement("span");
+      accountName.className = "account-name";
+      accountName.textContent = account.name || account.email;
+      accountName.style.fontWeight = account.active ? "600" : "400";
+      accountName.style.opacity = account.active ? "1" : "0.6";
       
       const right = document.createElement("div");
       right.style.display = "flex";
@@ -164,7 +173,8 @@ async function renderAccounts() {
         statusDot.title = "Inactive";
       }
       
-      left.appendChild(accountText);
+      left.appendChild(profilePic);
+      left.appendChild(accountName);
       right.appendChild(statusDot);
       
       accountItem.appendChild(left);
@@ -204,7 +214,7 @@ function showUnauthenticatedState() {
 async function loadPrefs() {
   const res = await chrome.runtime.sendMessage({ type: "GET_PREFS" });
   if (res?.ok) {
-    const { mode = "approachable", context = "work" } = res.prefs || {};
+    const { mode = "approachable", context = "work", slotDuration = null } = res.prefs || {};
     modeApproachable.checked = mode === "approachable";
     modeBusy.checked = mode === "busy";
     ctxPersonal.checked = context === "personal";
@@ -214,13 +224,37 @@ async function loadPrefs() {
     for (const btn of contextSegment.querySelectorAll("button")) {
       btn.classList.toggle("active", btn.dataset.value === context);
     }
+    // Set default duration based on context if not saved
+    let durationMinutes = slotDuration;
+    if (!durationMinutes) {
+      durationMinutes = context === "work" ? 30 : 180; // 30 min for work, 3h for personal
+    }
+    updateDurationTags(durationMinutes);
   }
+}
+
+function updateDurationTags(activeMinutes) {
+  for (const tag of durationTags.querySelectorAll(".duration-tag")) {
+    const tagMinutes = parseInt(tag.dataset.minutes);
+    const isActive = tagMinutes === activeMinutes;
+    tag.classList.toggle("active", isActive);
+    
+    const activeColor = tag.dataset.colorActive;
+    const inactiveColor = tag.dataset.colorInactive;
+    tag.style.background = isActive ? activeColor : inactiveColor;
+  }
+}
+
+function getActiveDuration() {
+  const activeTag = durationTags.querySelector(".duration-tag.active");
+  return activeTag ? parseInt(activeTag.dataset.minutes) : 30;
 }
 
 async function savePrefs() {
   const mode = modeBusy.checked ? "busy" : "approachable";
   const context = ctxPersonal.checked ? "personal" : "work";
-  await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context } });
+  const slotDuration = getActiveDuration();
+  await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context, slotDuration } });
 }
 
 // Populate timezone options
@@ -456,6 +490,30 @@ contextSegment.addEventListener("click", async (e) => {
   const val = btn.dataset.value;
   ctxPersonal.checked = val === "personal";
   ctxWork.checked = val !== "personal";
+  
+  // Update duration default when context changes
+  const defaultDuration = val === "work" ? 30 : 180;
+  updateDurationTags(defaultDuration);
+  
+  await savePrefs();
+  await autoGenerateAvailability();
+});
+
+// Duration tag click handler
+durationTags.addEventListener("click", async (e) => {
+  const tag = e.target.closest(".duration-tag");
+  if (!tag) return;
+  
+  // Remove active from all tags
+  for (const t of durationTags.querySelectorAll(".duration-tag")) {
+    t.classList.remove("active");
+    t.style.background = t.dataset.colorInactive;
+  }
+  
+  // Set active on clicked tag
+  tag.classList.add("active");
+  tag.style.background = tag.dataset.colorActive;
+  
   await savePrefs();
   await autoGenerateAvailability();
 });

@@ -161,6 +161,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         
         const events = await CalendarProvider.listEventsInRange(GOOGLE_CLIENT_ID, selectedCalendars, start.toISOString(), end.toISOString(), activeAccounts);
+    // Get default slot duration based on context if not set
+    const defaultSlotDuration = (prefs?.context || "work") === "work" ? 30 : 180;
+    const slotDuration = Number(prefs?.slotDuration) || defaultSlotDuration;
+    
     const prefsSafe = { 
       mode: (prefs?.mode)||"approachable", 
       context: (prefs?.context)||"work", 
@@ -181,7 +185,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           endHour: Number(prefs?.personalWeekendEndHour)||22
         }
       },
-      timeBuffer: Number(prefs?.timeBuffer)||0
+      timeBuffer: Number(prefs?.timeBuffer)||0,
+      slotDuration: slotDuration
     };
         const text = await generateAvailability(events, start, end, prefsSafe);
         sendResponse({ ok: true, text });

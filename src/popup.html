@@ -6,6 +6,10 @@
     <title>TimePaste</title>
     <style>
       * { box-sizing: border-box; }
+      html {
+        width: 400px;
+        min-width: 400px;
+      }
       body { 
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
         margin: 0; 
@@ -13,6 +17,8 @@
         background: #ffffff;
         min-height: 100vh;
         color: #1f2937;
+        width: 400px;
+        min-width: 400px;
       }
       @media (prefers-color-scheme: dark) {
         body {
@@ -22,7 +28,8 @@
       }
       .container {
         padding: 20px;
-        max-width: 400px;
+        width: 400px;
+        min-width: 400px;
         margin: 0 auto;
       }
       .header {
@@ -48,7 +55,7 @@
       .auth-section {
         background: #f9fafb;
         border-radius: 12px;
-        padding: 16px;
+        padding: 0;
         margin-bottom: 20px;
         border: none;
       }
@@ -69,6 +76,10 @@
         cursor: pointer;
         transition: all 0.2s ease;
         width: 100%;
+        margin-bottom: 8px;
+      }
+      #google-auth {
+        margin: 16px;
         margin-bottom: 8px;
       }
       .button:hover {
@@ -127,28 +138,51 @@
           color: #f9fafb;
         }
       }
+      .accounts-section {
+        margin: 0;
+        padding: 8px 8px 4px 8px;
+      }
+      .accounts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0px;
+        margin: 0;
+        padding: 0;
+      }
       .accounts-list .account-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        background: #ffffff;
+        gap: 5px;
+        padding: 3px 0;
+        border-radius: 6px;
+        background: transparent;
         border: none;
         cursor: pointer;
+        margin: 0;
       }
       @media (prefers-color-scheme: dark) {
         .accounts-list .account-item {
-          background: #1a1a1a;
+          background: transparent;
           border: none;
         }
       }
       .accounts-list .left {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         font-size: 14px;
+      }
+      .accounts-list .profile-picture {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+      }
+      .accounts-list .account-name {
+        font-size: 13px;
+        font-weight: 500;
       }
       .accounts-list .icon {
         width: 18px;
@@ -160,7 +194,7 @@
       }
       .accounts-list .check {
         width: 18px;
-        height: 18px;
+        height: 10px;
         border-radius: 50%;
         border: 1px solid #9ca3af;
         display: inline-flex;
@@ -231,11 +265,11 @@
       }
       .switch {
         position: relative; width: 40px; height: 22px; display:inline-block;
-        background: #d1d5db; border-radius: 999px; vertical-align: middle;
+        background: #81B703; border-radius: 999px; vertical-align: middle;
       }
       @media (prefers-color-scheme: dark) {
         .switch {
-          background: #444444;
+          background: #81B703;
         }
       }
       .switch .knob { position:absolute; top: 2px; left: 2px; width: 18px; height: 18px; background:#fff; border-radius:50%; transition:left 0.15s ease; }
@@ -244,18 +278,45 @@
           background: #ffffff;
         }
       }
-      .switch.on { background: #10b981; }
+      .switch.on { background: #F11B85; }
       @media (prefers-color-scheme: dark) {
         .switch.on {
-          background: #34d399;
+          background: #F11B85;
         }
       }
       .switch.on .knob { left: 20px; }
+      .duration-tag {
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: none;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: #BBEEF5;
+        color: #1f2937;
+      }
+      @media (prefers-color-scheme: dark) {
+        .duration-tag {
+          color: #f9fafb;
+        }
+      }
+      .duration-tag.active {
+        color: white;
+        font-weight: 700;
+      }
+      @media (prefers-color-scheme: dark) {
+        .duration-tag.active {
+          color: white;
+          font-weight: 700;
+        }
+      }
       .availability-label {
         font-size: 14px;
         font-weight: 500;
         margin-bottom: 12px;
         color: #1f2937;
+        text-align: center;
       }
       @media (prefers-color-scheme: dark) {
         .availability-label {
@@ -406,7 +467,7 @@
     <div class="container">
       <div class="header">
         <h1 class="title">TimePaste</h1>
-        <p class="subtitle">Generate your calendar availability</p>
+        <p class="subtitle">One click - all calendars</p>
       </div>
       
 
@@ -420,26 +481,30 @@
       </div>
       
       <div class="availability-section hidden" id="availability-section">
-        <div style="display:flex; gap:12px; margin-bottom:12px;">
-          <div style="flex:1;">
-            <div class="availability-label">Status</div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <span>Approachable</span>
-              <div id="mode-switch" class="switch"><span class="knob"></span></div>
-              <span>Busy</span>
-              <input type="radio" name="mode" value="approachable" id="mode-approachable" class="visually-hidden" checked />
-              <input type="radio" name="mode" value="busy" id="mode-busy" class="visually-hidden" />
-            </div>
+        <div style="margin-bottom:12px;">
+          <div class="availability-label">Availability Settings</div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
+            <span>All slots</span>
+            <div id="mode-switch" class="switch"><span class="knob"></span></div>
+            <span>Busy</span>
+            <input type="radio" name="mode" value="approachable" id="mode-approachable" class="visually-hidden" checked />
+            <input type="radio" name="mode" value="busy" id="mode-busy" class="visually-hidden" />
           </div>
-          <div style="flex:1;">
-            <div class="availability-label">Context</div>
-            <div class="segmented" id="context-segment">
-              <button type="button" data-value="personal">Personal</button>
-              <button type="button" data-value="work" class="active">Work</button>
-            </div>
-            <input type="radio" name="context" value="personal" id="ctx-personal" class="visually-hidden" />
-            <input type="radio" name="context" value="work" id="ctx-work" class="visually-hidden" checked />
+          <div id="duration-tags" style="display:flex; gap:6px; margin-top:8px; flex-wrap: wrap;">
+            <button type="button" class="duration-tag" data-minutes="15" data-color-active="#0A91A4" data-color-inactive="#BBEEF5">15 min</button>
+            <button type="button" class="duration-tag" data-minutes="30" data-color-active="#BC19F8" data-color-inactive="#E9AEFF">30 min</button>
+            <button type="button" class="duration-tag" data-minutes="60" data-color-active="#81B703" data-color-inactive="#DEFF90">1 h</button>
+            <button type="button" class="duration-tag" data-minutes="180" data-color-active="#F11B85" data-color-inactive="#EECEDE">3 h</button>
           </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div class="availability-label">Context</div>
+          <div class="segmented" id="context-segment">
+            <button type="button" data-value="personal">Personal</button>
+            <button type="button" data-value="work" class="active">Work</button>
+          </div>
+          <input type="radio" name="context" value="personal" id="ctx-personal" class="visually-hidden" />
+          <input type="radio" name="context" value="work" id="ctx-work" class="visually-hidden" checked />
         </div>
         <div style="margin-bottom:12px;">
           <div class="availability-label">Target Timezone</div>
