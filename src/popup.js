@@ -101,36 +101,35 @@ async function renderAccounts() {
       
       // Status dot
       const statusDot = document.createElement("div");
-      statusDot.style.width = "8px";
-      statusDot.style.height = "8px";
-      statusDot.style.borderRadius = "50%";
+      statusDot.className = "account-status-dot";
       statusDot.style.background = account.active ? "#d1d5db" : "#6b7280";
       statusDot.title = account.active ? "Checking connection..." : "Excluded from this paste";
       
       // On/off toggle
-      const toggleWrapper = document.createElement("div");
-      toggleWrapper.className = "account-toggle-wrapper";
-      
       const toggleBtn = document.createElement("button");
       toggleBtn.className = "account-toggle";
       toggleBtn.type = "button";
       
+      const toggleOnLabel = document.createElement("span");
+      toggleOnLabel.className = "account-toggle-text account-toggle-text-on";
+      toggleOnLabel.textContent = "ON";
+      
+      const toggleOffLabel = document.createElement("span");
+      toggleOffLabel.className = "account-toggle-text account-toggle-text-off";
+      toggleOffLabel.textContent = "OFF";
+      
       const toggleKnob = document.createElement("span");
       toggleKnob.className = "account-toggle-knob";
+      
+      toggleBtn.appendChild(toggleOnLabel);
+      toggleBtn.appendChild(toggleOffLabel);
       toggleBtn.appendChild(toggleKnob);
       
-      const toggleLabel = document.createElement("span");
-      toggleLabel.className = "account-toggle-label";
-      
-      toggleWrapper.appendChild(toggleBtn);
-      toggleWrapper.appendChild(toggleLabel);
-      
-      const setToggleState = (isActive, labelOverride = null) => {
+      const setToggleState = (isActive) => {
         toggleBtn.classList.toggle("on", isActive);
         toggleBtn.classList.toggle("off", !isActive);
         toggleBtn.setAttribute("aria-pressed", String(isActive));
         toggleBtn.title = isActive ? "Included in availability" : "Excluded from availability";
-        toggleLabel.textContent = labelOverride !== null ? labelOverride : (isActive ? "On" : "Off");
       };
       
       setToggleState(account.active);
@@ -140,7 +139,7 @@ async function renderAccounts() {
         const currentState = toggleBtn.classList.contains("on");
         const nextState = !currentState;
         toggleBtn.disabled = true;
-        setToggleState(nextState, nextState ? "On..." : "Off...");
+        setToggleState(nextState);
         let toggleSucceeded = false;
         try {
           const toggled = await toggleAccountActive(account.id, nextState);
@@ -181,7 +180,7 @@ async function renderAccounts() {
       left.appendChild(profilePic);
       left.appendChild(accountName);
       right.appendChild(statusDot);
-      right.appendChild(toggleWrapper);
+      right.appendChild(toggleBtn);
       
       accountItem.appendChild(left);
       accountItem.appendChild(right);
@@ -211,30 +210,30 @@ async function updateAccountStatus(account, statusDot, rightContainer) {
       if (tokenRes.status === "needs_reauth") {
         statusDot.style.background = "#e98c16"; // Amber
         statusDot.title = "Needs reconnection";
-        appendRetryIcon(account, rightContainer);
+        appendRetryIcon(account, statusDot, rightContainer);
       } else if (tokenRes.status === "active") {
         statusDot.style.background = "#098697"; // Connected
         statusDot.title = "Connected";
       } else {
         statusDot.style.background = "#CC0D6C"; // Error
         statusDot.title = "Connection error";
-        appendRetryIcon(account, rightContainer);
+        appendRetryIcon(account, statusDot, rightContainer);
       }
     } else {
       statusDot.style.background = "#e98c16";
       statusDot.title = "Status unknown - needs reconnection";
-      appendRetryIcon(account, rightContainer);
+      appendRetryIcon(account, statusDot, rightContainer);
     }
   } catch (error) {
     console.warn(`Failed to check status for account ${account.email}:`, error);
     if (!statusDot.isConnected) return;
     statusDot.style.background = "#e98c16"; // Amber
     statusDot.title = "Status check failed - needs reconnection";
-    appendRetryIcon(account, rightContainer);
+    appendRetryIcon(account, statusDot, rightContainer);
   }
 }
 
-function appendRetryIcon(account, rightContainer) {
+function appendRetryIcon(account, statusDot, rightContainer) {
   if (!rightContainer.isConnected) return;
   removeRetryIcon(rightContainer);
   
@@ -247,7 +246,11 @@ function appendRetryIcon(account, rightContainer) {
     await reconnectAccount(account.id);
   });
   
-  rightContainer.appendChild(retryIcon);
+  if (statusDot && statusDot.parentElement === rightContainer) {
+    rightContainer.insertBefore(retryIcon, statusDot.nextSibling);
+  } else {
+    rightContainer.appendChild(retryIcon);
+  }
 }
 
 function removeRetryIcon(rightContainer) {
