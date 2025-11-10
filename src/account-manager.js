@@ -56,8 +56,24 @@ export class AccountManager {
 
   // Get all stored accounts
   static async getAccounts() {
-    const { accounts = [] } = await chrome.storage.sync.get([this.ACCOUNTS_STORAGE_KEY]);
-    return accounts;
+    const storage = await chrome.storage.sync.get([this.ACCOUNTS_STORAGE_KEY, this.PREFS_STORAGE_KEY]);
+    const accounts = storage[this.ACCOUNTS_STORAGE_KEY] || [];
+    const activeAccounts = Array.isArray(storage[this.PREFS_STORAGE_KEY]?.activeAccounts)
+      ? storage[this.PREFS_STORAGE_KEY].activeAccounts
+      : null;
+    
+    if (!activeAccounts) {
+      return accounts.map(acc => ({
+        ...acc,
+        active: acc.active !== false
+      }));
+    }
+    
+    const activeSet = new Set(activeAccounts);
+    return accounts.map(acc => ({
+      ...acc,
+      active: activeSet.has(acc.id)
+    }));
   }
 
   // Add a new account
@@ -144,8 +160,13 @@ export class AccountManager {
 
   // Toggle account active status
   static async toggleAccountActive(accountId, active) {
-    const { prefs } = await chrome.storage.sync.get([this.PREFS_STORAGE_KEY]);
-    let activeAccounts = prefs?.activeAccounts || [];
+    const storage = await chrome.storage.sync.get([this.PREFS_STORAGE_KEY, this.ACCOUNTS_STORAGE_KEY]);
+    const prefs = storage[this.PREFS_STORAGE_KEY] || {};
+    const accounts = storage[this.ACCOUNTS_STORAGE_KEY] || [];
+    
+    let activeAccounts = Array.isArray(prefs.activeAccounts)
+      ? [...prefs.activeAccounts]
+      : accounts.filter(acc => acc.active !== false).map(acc => acc.id);
     
     if (active) {
       if (!activeAccounts.includes(accountId)) {
@@ -155,9 +176,18 @@ export class AccountManager {
       activeAccounts = activeAccounts.filter(id => id !== accountId);
     }
     
+    const activeSet = new Set(activeAccounts);
+    const updatedAccounts = accounts.map(acc => ({
+      ...acc,
+      active: activeSet.has(acc.id)
+    }));
+    
     await chrome.storage.sync.set({ 
-      prefs: { ...prefs, activeAccounts } 
+      [this.ACCOUNTS_STORAGE_KEY]: updatedAccounts,
+      [this.PREFS_STORAGE_KEY]: { ...prefs, activeAccounts }
     });
+    
+    return true;
   }
 
   // Authenticate a new Google account

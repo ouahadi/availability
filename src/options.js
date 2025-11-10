@@ -37,8 +37,8 @@ async function load() {
   const maxSlots = Number(prefs?.maxSlots) || 3;
   maxSlotsInput.value = String(maxSlots);
   
-  // Load timezone display setting (default: true)
-  const showTimezone = prefs?.showTimezone !== undefined ? prefs.showTimezone : true;
+  // Load timezone display setting (default: false to match popup)
+  const showTimezone = prefs?.showTimezone !== undefined ? prefs.showTimezone : false;
   showTimezoneInput.checked = showTimezone;
   
   // Load time buffer setting (default: 0)
@@ -562,6 +562,122 @@ timeBufferCustomInput.addEventListener("input", () => {
   timeBufferRadios.forEach(radio => {
     radio.checked = false;
   });
+});
+
+// Auto-save function that saves only the changed field
+async function autoSave(fieldName, value) {
+  const current = (await chrome.storage.sync.get(["prefs"])).prefs || {};
+  const updated = { ...current };
+  
+  if (fieldName === "showTimezone") {
+    updated.showTimezone = value;
+  } else if (fieldName === "maxSlots") {
+    updated.maxSlots = value;
+  } else if (fieldName === "timeBuffer") {
+    updated.timeBuffer = value;
+  } else if (fieldName === "timeBufferCustom") {
+    updated.timeBufferCustom = value > 0 ? value : undefined;
+  } else if (fieldName === "workStartHour") {
+    updated.workStartHour = value;
+  } else if (fieldName === "workEndHour") {
+    updated.workEndHour = value;
+  } else if (fieldName === "personalWeekdayStartHour") {
+    updated.personalWeekdayStartHour = value;
+  } else if (fieldName === "personalWeekdayEndHour") {
+    updated.personalWeekdayEndHour = value;
+  } else if (fieldName === "personalWeekendStartHour") {
+    updated.personalWeekendStartHour = value;
+  } else if (fieldName === "personalWeekendEndHour") {
+    updated.personalWeekendEndHour = value;
+  }
+  
+  await chrome.storage.sync.set({ prefs: updated });
+  
+  // Show saved indicator
+  savedEl.textContent = "Saved";
+  setTimeout(() => (savedEl.textContent = ""), 1200);
+}
+
+// Add auto-save listeners for all inputs
+showTimezoneInput.addEventListener("change", async () => {
+  await autoSave("showTimezone", showTimezoneInput.checked);
+});
+
+maxSlotsInput.addEventListener("change", async () => {
+  const maxSlots = Math.max(1, Number(maxSlotsInput.value || 3));
+  await autoSave("maxSlots", maxSlots);
+});
+
+// Work hours
+workStartHourInput.addEventListener("change", async () => {
+  const workStartTime = workStartHourInput.value;
+  const workStartHour = workStartTime ? parseInt(workStartTime.split(':')[0], 10) : 9;
+  const validatedWorkStartHour = Math.max(0, Math.min(23, workStartHour));
+  await autoSave("workStartHour", validatedWorkStartHour);
+});
+
+workEndHourInput.addEventListener("change", async () => {
+  const workEndTime = workEndHourInput.value;
+  const workEndHour = workEndTime ? parseInt(workEndTime.split(':')[0], 10) : 17;
+  const validatedWorkEndHour = Math.max(0, Math.min(23, workEndHour));
+  await autoSave("workEndHour", validatedWorkEndHour);
+});
+
+// Personal hours
+personalWeekdayStartHourInput.addEventListener("change", async () => {
+  const personalWeekdayStartTime = personalWeekdayStartHourInput.value;
+  const personalWeekdayStartHour = personalWeekdayStartTime ? parseInt(personalWeekdayStartTime.split(':')[0], 10) : 18;
+  const validatedPersonalWeekdayStartHour = Math.max(0, Math.min(23, personalWeekdayStartHour));
+  await autoSave("personalWeekdayStartHour", validatedPersonalWeekdayStartHour);
+});
+
+personalWeekdayEndHourInput.addEventListener("change", async () => {
+  const personalWeekdayEndTime = personalWeekdayEndHourInput.value;
+  const personalWeekdayEndHour = personalWeekdayEndTime ? parseInt(personalWeekdayEndTime.split(':')[0], 10) : 22;
+  const validatedPersonalWeekdayEndHour = Math.max(0, Math.min(23, personalWeekdayEndHour));
+  await autoSave("personalWeekdayEndHour", validatedPersonalWeekdayEndHour);
+});
+
+personalWeekendStartHourInput.addEventListener("change", async () => {
+  const personalWeekendStartTime = personalWeekendStartHourInput.value;
+  const personalWeekendStartHour = personalWeekendStartTime ? parseInt(personalWeekendStartTime.split(':')[0], 10) : 10;
+  const validatedPersonalWeekendStartHour = Math.max(0, Math.min(23, personalWeekendStartHour));
+  await autoSave("personalWeekendStartHour", validatedPersonalWeekendStartHour);
+});
+
+personalWeekendEndHourInput.addEventListener("change", async () => {
+  const personalWeekendEndTime = personalWeekendEndHourInput.value;
+  const personalWeekendEndHour = personalWeekendEndTime ? parseInt(personalWeekendEndTime.split(':')[0], 10) : 22;
+  const validatedPersonalWeekendEndHour = Math.max(0, Math.min(23, personalWeekendEndHour));
+  await autoSave("personalWeekendEndHour", validatedPersonalWeekendEndHour);
+});
+
+// Time buffer radios
+timeBufferRadios.forEach(radio => {
+  radio.addEventListener("change", async () => {
+    const timeBuffer = parseInt(radio.value, 10);
+    await autoSave("timeBuffer", timeBuffer);
+    if (timeBuffer > 0) {
+      timeBufferCustomInput.value = ""; // Clear custom input when a radio is selected
+    }
+  });
+});
+
+timeBufferCustomInput.addEventListener("input", async () => {
+  const timeBufferCustom = parseInt(timeBufferCustomInput.value || '0', 10);
+  if (timeBufferCustom > 0) {
+    await autoSave("timeBufferCustom", timeBufferCustom);
+  }
+});
+
+// Listen for storage changes to sync with popup
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "sync" && changes.prefs) {
+    const newPrefs = changes.prefs.newValue;
+    if (newPrefs && newPrefs.showTimezone !== undefined) {
+      showTimezoneInput.checked = newPrefs.showTimezone === true;
+    }
+  }
 });
 
 saveBtn.addEventListener("click", save);

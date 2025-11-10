@@ -1,11 +1,14 @@
 {
   "name": "timepaste",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Generate and share your calendar availability in any timezone",
   "scripts": {
-    "zip": "zip -r dist.zip manifest.json src -x '*.DS_Store'"
+    "zip": "zip -r dist.zip manifest.json src -x '*.DS_Store'",
+    "build:store": "node build-store.js",
+    "clean": "rm -rf dist dist.zip"
+  },
+  "devDependencies": {
+    "canvas": "^3.2.0"
   }
 }
-
-

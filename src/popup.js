@@ -19,6 +19,7 @@ const ctxPersonal = document.getElementById("ctx-personal");
 const ctxWork = document.getElementById("ctx-work");
 const modeSwitch = document.getElementById("mode-switch");
 const workingHoursCheckbox = document.getElementById("working-hours-checkbox");
+const includeTimezoneCheckbox = document.getElementById("include-timezone-checkbox");
 const targetTimezoneSelect = document.getElementById("target-timezone");
 const durationTags = document.getElementById("duration-tags");
 
@@ -103,87 +104,166 @@ async function renderAccounts() {
       statusDot.style.width = "8px";
       statusDot.style.height = "8px";
       statusDot.style.borderRadius = "50%";
+      statusDot.style.background = account.active ? "#d1d5db" : "#6b7280";
+      statusDot.title = account.active ? "Checking connection..." : "Excluded from this paste";
       
-      if (account.active) {
-        // Check if account needs reauth by trying to get a token
+      // On/off toggle
+      const toggleWrapper = document.createElement("div");
+      toggleWrapper.className = "account-toggle-wrapper";
+      
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "account-toggle";
+      toggleBtn.type = "button";
+      
+      const toggleKnob = document.createElement("span");
+      toggleKnob.className = "account-toggle-knob";
+      toggleBtn.appendChild(toggleKnob);
+      
+      const toggleLabel = document.createElement("span");
+      toggleLabel.className = "account-toggle-label";
+      
+      toggleWrapper.appendChild(toggleBtn);
+      toggleWrapper.appendChild(toggleLabel);
+      
+      const setToggleState = (isActive, labelOverride = null) => {
+        toggleBtn.classList.toggle("on", isActive);
+        toggleBtn.classList.toggle("off", !isActive);
+        toggleBtn.setAttribute("aria-pressed", String(isActive));
+        toggleBtn.title = isActive ? "Included in availability" : "Excluded from availability";
+        toggleLabel.textContent = labelOverride !== null ? labelOverride : (isActive ? "On" : "Off");
+      };
+      
+      setToggleState(account.active);
+      
+      toggleBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const currentState = toggleBtn.classList.contains("on");
+        const nextState = !currentState;
+        toggleBtn.disabled = true;
+        setToggleState(nextState, nextState ? "On..." : "Off...");
+        let toggleSucceeded = false;
         try {
-          const tokenRes = await chrome.runtime.sendMessage({ 
-            type: "CHECK_ACCOUNT_STATUS", 
-            accountId: account.id 
-          });
-          
-          if (tokenRes?.ok) {
-            if (tokenRes.status === 'needs_reauth') {
-              statusDot.style.background = "#f59e0b"; // Amber
-              statusDot.title = "Needs reconnection";
-              
-              // Add retry icon
-              const retryIcon = document.createElement("span");
-              retryIcon.textContent = "↻";
-              retryIcon.style.cursor = "pointer";
-              retryIcon.style.fontSize = "12px";
-              retryIcon.style.color = "#f59e0b";
-              retryIcon.title = "Click to reconnect";
-              retryIcon.addEventListener("click", async () => {
-                await reconnectAccount(account.id);
-              });
-              right.appendChild(retryIcon);
-            } else if (tokenRes.status === 'active') {
-              statusDot.style.background = "#10b981"; // Green
-              statusDot.title = "Connected";
+          const toggled = await toggleAccountActive(account.id, nextState);
+          if (toggled) {
+            account.active = nextState;
+            setToggleState(nextState);
+            if (nextState) {
+              // Re-check account status when re-enabled
+              updateAccountStatus(account, statusDot, right);
             } else {
-              statusDot.style.background = "#ef4444"; // Red
-              statusDot.title = "Connection error";
+              statusDot.style.background = "#6b7280";
+              statusDot.title = "Excluded from this paste";
+              removeRetryIcon(right);
             }
+            toggleSucceeded = true;
           } else {
-            // If status check failed, assume it needs reauth
-            statusDot.style.background = "#f59e0b"; // Amber
-            statusDot.title = "Status unknown - needs reconnection";
-            
-            const retryIcon = document.createElement("span");
-            retryIcon.textContent = "↻";
-            retryIcon.style.cursor = "pointer";
-            retryIcon.style.fontSize = "12px";
-            retryIcon.style.color = "#f59e0b";
-            retryIcon.title = "Click to reconnect";
-            retryIcon.addEventListener("click", async () => {
-              await reconnectAccount(account.id);
-            });
-            right.appendChild(retryIcon);
+            setToggleState(currentState);
+            statusEl.textContent = AccountManager.getUserFriendlyError("Failed to update account status");
           }
         } catch (error) {
-          console.warn(`Failed to check status for account ${account.email}:`, error);
-          // Don't fail the entire rendering - just mark this account as needing attention
-          statusDot.style.background = "#f59e0b"; // Amber
-          statusDot.title = "Status check failed - needs reconnection";
-          
-          const retryIcon = document.createElement("span");
-          retryIcon.textContent = "↻";
-          retryIcon.style.cursor = "pointer";
-          retryIcon.style.fontSize = "12px";
-          retryIcon.style.color = "#f59e0b";
-          retryIcon.title = "Click to reconnect";
-          retryIcon.addEventListener("click", async () => {
-            await reconnectAccount(account.id);
-          });
-          right.appendChild(retryIcon);
+          console.warn("Failed to toggle account:", error);
+          setToggleState(currentState);
+          statusEl.textContent = AccountManager.getUserFriendlyError(error?.message || error);
+        } finally {
+          toggleBtn.disabled = false;
         }
-      } else {
-        statusDot.style.background = "#6b7280"; // Gray
-        statusDot.title = "Inactive";
-      }
+        
+        if (toggleSucceeded) {
+          try {
+            await autoGenerateAvailability();
+          } catch (error) {
+            console.warn("Failed to regenerate availability after toggling account:", error);
+            statusEl.textContent = AccountManager.getUserFriendlyError(error?.message || error);
+          }
+        }
+      });
       
       left.appendChild(profilePic);
       left.appendChild(accountName);
       right.appendChild(statusDot);
+      right.appendChild(toggleWrapper);
       
       accountItem.appendChild(left);
       accountItem.appendChild(right);
       accountsList.appendChild(accountItem);
+      
+      if (account.active) {
+        updateAccountStatus(account, statusDot, right);
+      }
     }
   } catch (e) {
     accountsList.innerHTML = '<div style="color: #ff6b9d; text-align: center; padding: 8px;">Error loading accounts</div>';
   }
+}
+
+async function updateAccountStatus(account, statusDot, rightContainer) {
+  removeRetryIcon(rightContainer);
+  
+  try {
+    const tokenRes = await chrome.runtime.sendMessage({ 
+      type: "CHECK_ACCOUNT_STATUS", 
+      accountId: account.id 
+    });
+    
+    if (!statusDot.isConnected) return;
+    
+    if (tokenRes?.ok) {
+      if (tokenRes.status === "needs_reauth") {
+        statusDot.style.background = "#e98c16"; // Amber
+        statusDot.title = "Needs reconnection";
+        appendRetryIcon(account, rightContainer);
+      } else if (tokenRes.status === "active") {
+        statusDot.style.background = "#098697"; // Connected
+        statusDot.title = "Connected";
+      } else {
+        statusDot.style.background = "#CC0D6C"; // Error
+        statusDot.title = "Connection error";
+        appendRetryIcon(account, rightContainer);
+      }
+    } else {
+      statusDot.style.background = "#e98c16";
+      statusDot.title = "Status unknown - needs reconnection";
+      appendRetryIcon(account, rightContainer);
+    }
+  } catch (error) {
+    console.warn(`Failed to check status for account ${account.email}:`, error);
+    if (!statusDot.isConnected) return;
+    statusDot.style.background = "#e98c16"; // Amber
+    statusDot.title = "Status check failed - needs reconnection";
+    appendRetryIcon(account, rightContainer);
+  }
+}
+
+function appendRetryIcon(account, rightContainer) {
+  if (!rightContainer.isConnected) return;
+  removeRetryIcon(rightContainer);
+  
+  const retryIcon = document.createElement("span");
+  retryIcon.className = "retry-account-btn";
+  retryIcon.textContent = "↻";
+  retryIcon.title = "Click to reconnect";
+  retryIcon.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await reconnectAccount(account.id);
+  });
+  
+  rightContainer.appendChild(retryIcon);
+}
+
+function removeRetryIcon(rightContainer) {
+  const existing = rightContainer.querySelector(".retry-account-btn");
+  if (existing) {
+    existing.remove();
+  }
+}
+
+async function toggleAccountActive(accountId, active) {
+  const res = await chrome.runtime.sendMessage({
+    type: "TOGGLE_ACCOUNT_ACTIVE",
+    accountId,
+    active
+  });
+  return res?.ok === true;
 }
 
 async function reconnectAccount(accountId) {
@@ -203,6 +283,37 @@ async function reconnectAccount(accountId) {
   }
 }
 
+async function removeAccount(accountId) {
+  try {
+    const res = await chrome.runtime.sendMessage({ 
+      type: "REMOVE_ACCOUNT", 
+      accountId: accountId 
+    });
+    
+    if (res?.ok) {
+      // Refresh the account list
+      const accountsRes = await chrome.runtime.sendMessage({ type: "LIST_ACCOUNTS" });
+      if (accountsRes?.ok && accountsRes.accounts.length > 0) {
+        const activeAccounts = accountsRes.accounts.filter(acc => acc.active);
+        if (activeAccounts.length > 0) {
+          await renderAccounts();
+          await autoGenerateAvailability(); // Regenerate availability with updated accounts
+        } else {
+          // No active accounts left, show unauthenticated state
+          showUnauthenticatedState();
+        }
+      } else {
+        // No accounts left, show unauthenticated state
+        showUnauthenticatedState();
+      }
+    } else {
+      statusEl.textContent = AccountManager.getUserFriendlyError(res?.error || "Failed to remove account");
+    }
+  } catch (error) {
+    statusEl.textContent = AccountManager.getUserFriendlyError(error.message);
+  }
+}
+
 function showUnauthenticatedState() {
   authButton.classList.remove("hidden");
   userProfileEl.classList.add("hidden");
@@ -214,13 +325,15 @@ function showUnauthenticatedState() {
 async function loadPrefs() {
   const res = await chrome.runtime.sendMessage({ type: "GET_PREFS" });
   if (res?.ok) {
-    const { mode = "approachable", context = "work", slotDuration = null } = res.prefs || {};
+    const { mode = "approachable", context = "work", slotDuration = null, showTimezone = false } = res.prefs || {};
     modeApproachable.checked = mode === "approachable";
     modeBusy.checked = mode === "busy";
     // Update checkbox based on context (checked = work, unchecked = personal)
     workingHoursCheckbox.checked = context !== "personal";
     ctxPersonal.checked = context === "personal";
     ctxWork.checked = context !== "personal";
+    // Update include timezone checkbox (default to false in popup)
+    includeTimezoneCheckbox.checked = showTimezone === true;
     // Reflect on custom controls
     modeSwitch.classList.toggle("on", mode === "busy");
     // Set default duration based on context if not saved
@@ -253,10 +366,11 @@ async function savePrefs() {
   const mode = modeBusy.checked ? "busy" : "approachable";
   const context = workingHoursCheckbox.checked ? "work" : "personal";
   const slotDuration = getActiveDuration();
+  const showTimezone = includeTimezoneCheckbox.checked;
   // Update radio buttons to match checkbox
   ctxPersonal.checked = context === "personal";
   ctxWork.checked = context !== "personal";
-  await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context, slotDuration } });
+  await chrome.runtime.sendMessage({ type: "SET_PREFS", prefs: { mode, context, slotDuration, showTimezone } });
 }
 
 // Populate timezone options
@@ -294,7 +408,7 @@ function populateTimezoneOptions() {
   const localOffset = -new Date().getTimezoneOffset() / 60;
   
   // Add local timezone option
-  targetTimezoneSelect.innerHTML = '<option value="local">My Timezone (Local)</option>';
+  targetTimezoneSelect.innerHTML = '<option value="local">Change Timezone (Local)</option>';
   
   // Add other timezone options
   for (const tz of timezones) {
@@ -306,46 +420,79 @@ function populateTimezoneOptions() {
   }
 }
 
+// Update timezone dropdown to show current selection in parentheses
+function updateTimezoneDropdownDisplay() {
+  const selectedValue = targetTimezoneSelect.value;
+  
+  // Update the first option (local) to show current selection
+  if (selectedValue === "local") {
+    targetTimezoneSelect.options[0].textContent = `Change Timezone (Local)`;
+  } else {
+    const selectedOffset = parseInt(selectedValue);
+    targetTimezoneSelect.options[0].textContent = `Change Timezone (GMT${selectedOffset >= 0 ? '+' : ''}${selectedOffset})`;
+  }
+}
+
 // Convert availability text to target timezone
-function convertAvailabilityToTimezone(text, targetOffset) {
+function convertAvailabilityToTimezone(text, targetOffset, showTimezone) {
   const localOffset = -new Date().getTimezoneOffset() / 60;
   
-  // Remove any existing header
-  const cleanedText = text.replace(/^My availability in .+? is as follows:\s*\n*/i, '').trim();
+  // Remove any existing header (handle both old and new formats)
+  const cleanedText = text.replace(/^My availability (in .+? )?according to TimePaste is as follows:\s*\n*/i, '')
+                           .replace(/^My availability in .+? is as follows:\s*\n*/i, '')
+                           .trim();
   
-  // Always add header with current timezone info
-  let header = "";
+  // Determine timezone string for display
+  let timezoneStr = "";
   if (targetOffset === "local") {
-    header = `My availability in GMT${localOffset >= 0 ? '+' : ''}${localOffset} is as follows:\n\n`;
-    return header + cleanedText;
+    timezoneStr = `GMT${localOffset >= 0 ? '+' : ''}${localOffset}`;
   } else {
-    const offsetDiff = targetOffset - localOffset;
-    
-    // Parse availability text and convert times
-    const lines = cleanedText.split('\n');
-    const converted = lines.map(line => {
-      if (!line.trim()) return line;
-      
-      // Check if this is a time range line
-      const timeRangeMatch = line.match(/(.+?)\s+-\s+(\d{2}):(\d{2})[:\s]*-(\d{2}):(\d{2})/);
-      if (timeRangeMatch) {
-        const [, datePart, startH, startM, endH, endM] = timeRangeMatch;
-        
-        // Convert times
-        const startTime = addHours(parseInt(startH), parseInt(startM), offsetDiff);
-        const endTime = addHours(parseInt(endH), parseInt(endM), offsetDiff);
-        
-        return `${datePart} - ${startTime.hours.toString().padStart(2, '0')}:${startTime.minutes.toString().padStart(2, '0')}-${endTime.hours.toString().padStart(2, '0')}:${endTime.minutes.toString().padStart(2, '0')}`;
-      }
-      
-      return line;
-    });
-    
-    const targetOffsetStr = `GMT ${targetOffset >= 0 ? '+' : ''}${targetOffset}`;
-    header = `My availability in ${targetOffsetStr} is as follows:\n\n`;
-    
-    return header + converted.join('\n');
+    timezoneStr = `GMT${targetOffset >= 0 ? '+' : ''}${targetOffset}`;
   }
+  
+  // Build header based on new logic
+  let header = "";
+  if (!showTimezone && targetOffset === "local") {
+    // Include timezone is OFF and timezone hasn't been changed
+    header = "My availability according to TimePaste is as follows:\n\n";
+    return header + cleanedText;
+  } else if (!showTimezone && targetOffset !== "local") {
+    // Include timezone is OFF but timezone has been changed
+    header = `My availability in ${timezoneStr} according to TimePaste is as follows:\n\n`;
+  } else {
+    // Include timezone is ON
+    header = `My availability in ${timezoneStr} according to TimePaste is as follows:\n\n`;
+  }
+  
+  // If targetOffset is local, no conversion needed
+  if (targetOffset === "local") {
+    return header + cleanedText;
+  }
+  
+  // Convert times to target timezone
+  const offsetDiff = targetOffset - localOffset;
+  
+  // Parse availability text and convert times
+  const lines = cleanedText.split('\n');
+  const converted = lines.map(line => {
+    if (!line.trim()) return line;
+    
+    // Check if this is a time range line
+    const timeRangeMatch = line.match(/(.+?)\s+-\s+(\d{2}):(\d{2})[:\s]*-(\d{2}):(\d{2})/);
+    if (timeRangeMatch) {
+      const [, datePart, startH, startM, endH, endM] = timeRangeMatch;
+      
+      // Convert times
+      const startTime = addHours(parseInt(startH), parseInt(startM), offsetDiff);
+      const endTime = addHours(parseInt(endH), parseInt(endM), offsetDiff);
+      
+      return `${datePart} - ${startTime.hours.toString().padStart(2, '0')}:${startTime.minutes.toString().padStart(2, '0')}-${endTime.hours.toString().padStart(2, '0')}:${endTime.minutes.toString().padStart(2, '0')}`;
+    }
+    
+    return line;
+  });
+  
+  return header + converted.join('\n');
 }
 
 // Helper function to add hours to time
@@ -383,8 +530,13 @@ addAccountBtn.addEventListener("click", async () => {
   try {
     const res = await chrome.runtime.sendMessage({ type: "ADD_GOOGLE_ACCOUNT" });
     if (res?.success) {
-      await renderAccounts();
       addAccountBtn.textContent = "Added ✓";
+      renderAccounts().catch((error) => {
+        console.warn("Failed to refresh account list after adding account:", error);
+      });
+      autoGenerateAvailability().catch((error) => {
+        console.warn("Failed to regenerate availability after adding account:", error);
+      });
       setTimeout(() => {
         addAccountBtn.textContent = "+ Add Account";
         addAccountBtn.disabled = false;
@@ -451,7 +603,8 @@ copyBtn.addEventListener("click", async () => {
     
     // Apply timezone conversion
     const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
-    const convertedText = convertAvailabilityToTimezone(res.text, targetOffset);
+    const showTimezone = includeTimezoneCheckbox.checked;
+    const convertedText = convertAvailabilityToTimezone(res.text, targetOffset, showTimezone);
     
     availabilityEl.value = convertedText;
     statusEl.textContent = "Copied to clipboard";
@@ -496,6 +649,21 @@ workingHoursCheckbox.addEventListener("change", async () => {
   await autoGenerateAvailability();
 });
 
+// Include timezone checkbox handler
+includeTimezoneCheckbox.addEventListener("change", async () => {
+  await savePrefs();
+  // Reconvert current availability text with new header
+  const currentText = availabilityEl.value;
+  if (currentText) {
+    const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
+    const showTimezone = includeTimezoneCheckbox.checked;
+    const convertedText = convertAvailabilityToTimezone(currentText, targetOffset, showTimezone);
+    availabilityEl.value = convertedText;
+  } else {
+    await autoGenerateAvailability();
+  }
+});
+
 // Duration tag click handler
 durationTags.addEventListener("click", async (e) => {
   const tag = e.target.closest(".duration-tag");
@@ -517,11 +685,15 @@ durationTags.addEventListener("click", async (e) => {
 
 // Timezone selector change handler
 targetTimezoneSelect.addEventListener("change", async () => {
+  // Update dropdown display
+  updateTimezoneDropdownDisplay();
+  
   // Reconvert the current availability text
   const currentText = availabilityEl.value;
   if (currentText) {
     const targetOffset = targetTimezoneSelect.value === "local" ? "local" : parseInt(targetTimezoneSelect.value);
-    const convertedText = convertAvailabilityToTimezone(currentText, targetOffset);
+    const showTimezone = includeTimezoneCheckbox.checked;
+    const convertedText = convertAvailabilityToTimezone(currentText, targetOffset, showTimezone);
     availabilityEl.value = convertedText;
     
     // Copy to clipboard
@@ -533,6 +705,22 @@ targetTimezoneSelect.addEventListener("change", async () => {
   }
 });
 
+
+// Settings icon click handler
+const settingsIcon = document.getElementById("settings-icon");
+settingsIcon.addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+});
+
+// Listen for storage changes to sync with options page
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "sync" && changes.prefs) {
+    const newPrefs = changes.prefs.newValue;
+    if (newPrefs && newPrefs.showTimezone !== undefined) {
+      includeTimezoneCheckbox.checked = newPrefs.showTimezone === true;
+    }
+  }
+});
 
 // Initialize
 checkAuthStatus();
