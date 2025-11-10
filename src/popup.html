@@ -411,7 +411,7 @@
           background: #81B703;
         }
       }
-      .switch .knob { position:absolute; top: 2px; left: 2px; width: 18px; height: 18px; background:#fff; border-radius:50%; transition:left 0.15s ease; }
+      .switch .knob { position:absolute; top: 2px; left: 2px; width: 18px; height: 18px; background:#fff; border-radius:50%; transition:transform 0.15s ease; }
       @media (prefers-color-scheme: dark) {
         .switch .knob {
           background: #ffffff;
@@ -423,7 +423,7 @@
           background: #F11B85;
         }
       }
-      .switch.on .knob { left: 22px; }
+      .switch.on .knob { transform: translateX(22px); }
       .duration-tag {
         padding: 4px 10px;
         border-radius: 6px;
