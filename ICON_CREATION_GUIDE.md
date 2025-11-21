@@ -12,16 +12,16 @@ Chrome Web Store requires extension icons in specific sizes. Follow these steps 
 
 - Format: PNG
 - Background: Transparent or solid color
-- File names: `icon16.png`, `icon48.png`, `icon128.png`
+- File names: `TP_16_2.png`, `TP_48_2.png`, `TP_128_2.png`
 
 ## Creating Icons
 
 ### Option 1: Use a Design Tool (Recommended)
 
 1. Create a 128x128px design with your logo/branding
-2. Export at 128x128px → `icon128.png`
-3. Scale down to 48x48px → `icon48.png`
-4. Scale down to 16x16px → `icon16.png`
+2. Export at 128x128px → `TP_128_2.png`
+3. Scale down to 48x48px → `TP_48_2.png`
+4. Scale down to 16x16px → `TP_16_2.png`
 
 ### Option 2: Online Icon Generator
 
@@ -42,9 +42,9 @@ If you have a base image at 128x128 or larger:
 mkdir -p icons
 
 # Generate icons from a base image (replace base.png with your image)
-convert base.png -resize 128x128 icons/icon128.png
-convert base.png -resize 48x48 icons/icon48.png
-convert base.png -resize 16x16 icons/icon16.png
+convert base.png -resize 128x128 icons/TP_128_2.png
+convert base.png -resize 48x48 icons/TP_48_2.png
+convert base.png -resize 16x16 icons/TP_16_2.png
 ```
 
 ### Option 4: Quick Placeholder Icons
@@ -55,9 +55,9 @@ For testing purposes, you can create simple colored squares:
 mkdir -p icons
 
 # Create simple colored icons (using ImageMagick)
-convert -size 128x128 xc:"#0A91A4" icons/icon128.png
-convert -size 48x48 xc:"#0A91A4" icons/icon48.png
-convert -size 16x16 xc:"#0A91A4" icons/icon16.png
+convert -size 128x128 xc:"#0A91A4" icons/TP_128_2.png
+convert -size 48x48 xc:"#0A91A4" icons/TP_48_2.png
+convert -size 16x16 xc:"#0A91A4" icons/TP_16_2.png
 ```
 
 Or use one of the accent colors from your palette:
@@ -90,9 +90,9 @@ Place all icons in the `icons/` directory:
 
 ```
 icons/
-  ├── icon16.png
-  ├── icon48.png
-  └── icon128.png
+  ├── TP_16_2.png
+  ├── TP_48_2.png
+  └── TP_128_2.png
 ```
 
 After creating icons, verify they're included when you run `npm run build:store`.

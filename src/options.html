@@ -62,6 +62,10 @@
         .muted-text {
           color: #9ca3af;
         }
+        .hint[style*="background:#f0f9ff"] {
+          background: #1e3a5f !important;
+          border-color: #3b82f6 !important;
+        }
       }
       #debug-output {
         background: #f8f9fa;
@@ -177,6 +181,11 @@
       <div style="margin-top:12px; display:flex; gap:8px;">
         <button id="add-google-account" style="padding:8px 12px; background:#4285f4; color:white; border:none; border-radius:4px; font-size:12px;">+ Add Google Account</button>
         <button id="refresh-calendars" class="button secondary" style="width:auto; padding:8px 12px;">Refresh</button>
+      </div>
+      <div class="hint" style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px;">
+        <strong>OAuth Redirect URI:</strong><br>
+        <code id="redirect-uri" style="font-size:11px; word-break:break-all; display:block; margin-top:4px;"></code>
+        <div style="margin-top:8px; font-size:11px;">Add this URL to your Google Cloud Console OAuth client's "Authorized redirect URIs" list.</div>
       </div>
     </div>
     <div class="section">

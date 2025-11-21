@@ -78,6 +78,13 @@ async function load() {
   personalWeekendEndHourInput.value = `${personalWeekendEndHour.toString().padStart(2, '0')}:00`;
   
   await renderAccounts();
+  
+  // Display OAuth redirect URI
+  const redirectUriEl = document.getElementById("redirect-uri");
+  if (redirectUriEl) {
+    const redirectUri = chrome.identity.getRedirectURL();
+    redirectUriEl.textContent = redirectUri;
+  }
 }
 
 async function save() {

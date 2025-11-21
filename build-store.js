@@ -77,7 +77,7 @@ if (fs.existsSync(iconsDir)) {
   console.log(`✓ ${iconsDir}/`);
 } else {
   console.warn('⚠️  Warning: icons/ directory not found. Chrome Web Store requires icons.');
-  console.warn('   Please create icons/icon16.png, icons/icon48.png, and icons/icon128.png');
+  console.warn('   Please create icons/TP_16_2.png, icons/TP_48_2.png, and icons/TP_128_2.png');
 }
 
 // Create config.js placeholder or read from existing

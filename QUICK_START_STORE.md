@@ -9,9 +9,9 @@ Chrome Web Store requires extension icons. Create them now:
 mkdir -p icons
 
 # Option A: Use ImageMagick to create simple colored icons (for testing)
-convert -size 128x128 xc:"#0A91A4" icons/icon128.png
-convert -size 48x48 xc:"#0A91A4" icons/icon48.png
-convert -size 16x16 xc:"#0A91A4" icons/icon16.png
+convert -size 128x128 xc:"#0A91A4" icons/TP_128_2.png
+convert -size 48x48 xc:"#0A91A4" icons/TP_48_2.png
+convert -size 16x16 xc:"#0A91A4" icons/TP_16_2.png
 
 # Option B: Create proper branded icons (see ICON_CREATION_GUIDE.md)
 # Use a design tool to create icons and save them to icons/

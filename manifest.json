@@ -8,15 +8,15 @@
     "default_title": "TimePaste",
     "default_popup": "src/popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/fav double check16.png",
+      "48": "icons/TP_48_2.png",
+      "128": "icons/TP_128_2.png"
     }
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/fav double check16.png",
+    "48": "icons/TP_48_2.png",
+    "128": "icons/TP_128_2.png"
   },
   "options_ui": {
     "page": "src/options.html",
